@@ -2,17 +2,44 @@ import sys
 import pytest
 from unittest.mock import AsyncMock, MagicMock
 
-# モジュールを強制的に再読み込み（他のテストでのモックの影響を排除）
-for mod in list(sys.modules.keys()):
-    if mod.startswith('adapters.') or mod.startswith('router.'):
-        del sys.modules[mod]
+# adapters.base をモック化（PR1/PR2 未マージ時の対応）
+if 'adapters.base' not in sys.modules:
+    from abc import ABC, abstractmethod
+    from typing import AsyncIterator
+    from types import ModuleType
+    base_module = ModuleType('adapters.base')
+    
+    class RateLimitError(Exception):
+        pass
+    
+    class ProviderTimeoutError(Exception):
+        pass
+    
+    class ProviderError(Exception):
+        pass
+    
+    class AbstractLLMAdapter(ABC):
+        @abstractmethod
+        async def chat_completion(self, payload: dict, model: str, timeout: float) -> dict:
+            pass
+        
+        @abstractmethod
+        async def chat_completion_stream(self, payload: dict, model: str, timeout: float) -> AsyncIterator[bytes]:
+            pass
+    
+    base_module.RateLimitError = RateLimitError
+    base_module.ProviderTimeoutError = ProviderTimeoutError
+    base_module.ProviderError = ProviderError
+    base_module.AbstractLLMAdapter = AbstractLLMAdapter
+    sys.modules['adapters.base'] = base_module
+else:
+    from adapters.base import (
+        AbstractLLMAdapter,
+        ProviderError,
+        ProviderTimeoutError,
+        RateLimitError,
+    )
 
-from adapters.base import (
-    AbstractLLMAdapter,
-    ProviderError,
-    ProviderTimeoutError,
-    RateLimitError,
-)
 from router.failover import FailoverRouter
 
 

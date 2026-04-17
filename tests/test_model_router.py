@@ -1,12 +1,6 @@
-import sys
 import time
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
-
-# モジュールを強制的に再読み込み（他のテストでのモックの影響を排除）
-for mod in list(sys.modules.keys()):
-    if mod.startswith('adapters.') or mod.startswith('router.'):
-        del sys.modules[mod]
 
 from router.model_router import ModelRouter
 
