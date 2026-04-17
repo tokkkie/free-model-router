@@ -1,0 +1,12 @@
+{
+  "timeout_seconds": 20,
+  "model_cache_ttl_seconds": 300,
+  "openrouter_base_url": "https://openrouter.ai/api/v1",
+  "ollama_base_url": "http://localhost:11434",
+  "ollama_model": "phi3.5:latest",
+  "priority_keywords": [
+    {"keywords": ["qwen", "nemotron"], "priority": 1},
+    {"keywords": ["google/gemini", "gemma"], "priority": 2},
+    {"keywords": ["phi", "mistral"], "priority": 3}
+  ]
+}
