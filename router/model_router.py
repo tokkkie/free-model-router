@@ -1,7 +1,12 @@
+import json
+import logging
+import os
 import time
 from typing import Any
 
 import httpx
+
+logger = logging.getLogger(__name__)
 
 
 class ModelRouter:
@@ -20,6 +25,7 @@ class ModelRouter:
         self._cache_ttl = cache_ttl
         self._cached_models: list[str] = []
         self._cache_time: float = 0.0
+        self._known_vendors_file = "known_vendors.json"
 
     async def get_free_models(self) -> list[str]:
         """無料モデルリストを取得（キャッシュ付き）"""
@@ -32,14 +38,17 @@ class ModelRouter:
             resp.raise_for_status()
             data = resp.json()
 
+        all_models = data.get("data", [])
+
         free_models = [
             m["id"]
-            for m in data.get("data", [])
+            for m in all_models
             if ":free" in m["id"]
             and m.get("pricing", {}).get("prompt") == "0"
             and m.get("pricing", {}).get("completion") == "0"
         ]
 
+        self._detect_new_vendors(all_models, free_models)
         filtered_models = self._filter_excluded(free_models)
         sorted_models = self._sort_by_priority(filtered_models)
         self._cached_models = sorted_models
@@ -73,3 +82,62 @@ class ModelRouter:
                 filtered.append(model_id)
 
         return filtered
+
+    def _detect_new_vendors(self, all_models: list[dict], free_models: list[str]) -> None:
+        """新しいベンダーを検出し、Freeモデルがある場合は警告"""
+        current_vendors = set(
+            m["id"].split("/")[0] for m in all_models if "/" in m["id"]
+        )
+
+        known_vendors = self._load_known_vendors()
+
+        if not known_vendors:
+            self._save_known_vendors(current_vendors)
+            return
+
+        new_vendors = current_vendors - known_vendors
+
+        if new_vendors:
+            free_vendor_models = {}
+            for model_id in free_models:
+                if "/" in model_id:
+                    vendor = model_id.split("/")[0]
+                    if vendor in new_vendors:
+                        if vendor not in free_vendor_models:
+                            free_vendor_models[vendor] = []
+                        free_vendor_models[vendor].append(model_id)
+
+            if free_vendor_models:
+                logger.warning(
+                    "\n" + "="*70 + "\n"
+                    "新しいベンダーのFreeモデルが検出されました。\n"
+                    "ブラックリスト(exclude_keywords)への追加を検討してください:\n"
+                )
+                for vendor in sorted(free_vendor_models.keys()):
+                    logger.warning(f"  [{vendor}]")
+                    for model in free_vendor_models[vendor]:
+                        logger.warning(f"    - {model}")
+                logger.warning("="*70)
+
+        self._save_known_vendors(current_vendors)
+
+    def _load_known_vendors(self) -> set[str]:
+        """既知のベンダーリストをファイルから読み込み"""
+        if not os.path.exists(self._known_vendors_file):
+            return set()
+
+        try:
+            with open(self._known_vendors_file, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                return set(data.get("vendors", []))
+        except Exception as e:
+            logger.error(f"Failed to load known vendors: {e}")
+            return set()
+
+    def _save_known_vendors(self, vendors: set[str]) -> None:
+        """ベンダーリストをファイルに保存"""
+        try:
+            with open(self._known_vendors_file, "w", encoding="utf-8") as f:
+                json.dump({"vendors": sorted(vendors)}, f, indent=2, ensure_ascii=False)
+        except Exception as e:
+            logger.error(f"Failed to save known vendors: {e}")
