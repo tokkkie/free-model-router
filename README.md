@@ -67,6 +67,7 @@ curl -X POST http://127.0.0.1:4141/v1/chat/completions \
 |---|---|
 | `timeout_seconds` | 各モデルへのリクエストタイムアウト（秒） |
 | `model_cache_ttl_seconds` | モデルリストキャッシュ有効期限（秒） |
+| `exclude_keywords` | 除外するモデルのキーワード（日本語に弱いモデル等） |
 | `priority_keywords` | モデル優先順位キーワード |
 | `ollama_model` | ローカル Fallback モデル名 |
 
