@@ -1,12 +1,13 @@
 {
-  "timeout_seconds": 20,
+  "timeout_seconds": 10,
   "model_cache_ttl_seconds": 300,
   "openrouter_base_url": "https://openrouter.ai/api/v1",
   "ollama_base_url": "http://localhost:11434",
   "ollama_model": "phi3.5:latest",
   "priority_keywords": [
-    {"keywords": ["qwen", "nemotron"], "priority": 1},
-    {"keywords": ["google/gemini", "gemma"], "priority": 2},
-    {"keywords": ["phi", "mistral"], "priority": 3}
+    {"keywords": ["120b", "405b"], "priority": 99},
+    {"keywords": ["20b", "24b", "27b", "30b", "31b"], "priority": 1},
+    {"keywords": ["70b", "80b"], "priority": 2},
+    {"keywords": ["3b", "4b", "7b", "9b", "12b"], "priority": 3}
   ]
 }
