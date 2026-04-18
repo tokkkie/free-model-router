@@ -1,0 +1,65 @@
+#!/bin/sh
+
+# ============================================
+# コミットメッセージ形式チェック
+# ============================================
+# 形式: prefix: 一目で内容がわかる説明
+# （妥当な日本語が無い場合は、中学レベルの平易な英語 "Simple English"）
+
+commit_msg_file=$1
+commit_msg=$(cat "$commit_msg_file")
+
+# 空のコミットメッセージは許可しない
+if [ -z "$commit_msg" ]; then
+    echo "--------------------------------------------------"
+    echo "ERROR: コミットメッセージが空です。"
+    echo "形式: prefix: 一目で内容がわかる説明"
+    echo "例: fix: ログイン時のバグを修正"
+    echo "例: feat: ユーザー登録機能を追加"
+    echo "--------------------------------------------------"
+    exit 1
+fi
+
+# コメント行（#で始まる行）を除外してチェック
+commit_msg_filtered=$(echo "$commit_msg" | grep -v '^#' | head -n 1)
+
+# 形式チェック: "prefix: 説明" のパターン
+if ! echo "$commit_msg_filtered" | grep -qE '^[a-z]+(_[a-z]+)*:\s+.+$'; then
+    echo "--------------------------------------------------"
+    echo "ERROR: コミットメッセージの形式が正しくありません。"
+    echo "形式: prefix: 一目で内容がわかる説明"
+    echo "例: fix: ログイン時のバグを修正"
+    echo "例: feat: ユーザー登録機能を追加"
+    echo "例: refactor: コード構造を整理"
+    echo "例: docs: READMEを更新"
+    echo "例: chore: 依存パッケージを更新"
+    echo ""
+    echo "現在のメッセージ: $commit_msg_filtered"
+    echo "--------------------------------------------------"
+    exit 1
+fi
+
+# prefix の取得
+prefix=$(echo "$commit_msg_filtered" | cut -d':' -f1)
+
+# 一般的な prefix リスト（警告のみ、強制はしない）
+common_prefixes="fix|feat|refactor|docs|chore|test|style|perf|ci|build|revert"
+
+if ! echo "$prefix" | grep -qE "^($common_prefixes)$"; then
+    echo "--------------------------------------------------"
+    echo "WARNING: コミットメッセージのprefixが一般的ではありません。"
+    echo "一般的なprefix: fix, feat, refactor, docs, chore, test, style, perf, ci, build, revert"
+    echo "現在のprefix: $prefix"
+    echo "--------------------------------------------------"
+    # 警告のみで続行
+fi
+
+# メッセージ長チェック（長すぎるメッセージを警告）
+if [ ${#commit_msg_filtered} -gt 100 ]; then
+    echo "--------------------------------------------------"
+    echo "WARNING: コミットメッセージが長すぎます（${#commit_msg_filtered}文字）。"
+    echo "簡潔なメッセージ（100文字以内）を推奨します。"
+    echo "現在のメッセージ: $commit_msg_filtered"
+    echo "--------------------------------------------------"
+    # 警告のみで続行
+fi

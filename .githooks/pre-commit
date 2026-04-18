@@ -1,0 +1,157 @@
+#!/bin/bash
+
+# ============================================
+# main直接コミット禁止チェック
+# ============================================
+protected_branch="main"
+current_branch=$(git rev-parse --abbrev-ref HEAD)
+
+if [ "$current_branch" = "$protected_branch" ]; then
+    echo "--------------------------------------------------"
+    echo "ERROR: mainへの直接コミットは禁止されています。"
+    echo "作業用ブランチを作成し、そこにコミットしてください。"
+    echo "ブランチをpushし、GitHub上でPRを作成してください。"
+    echo "--------------------------------------------------"
+    exit 1
+fi
+
+# ============================================
+# .gitignore対象ファイルの強制addチェック
+# ============================================
+# git ls-files --others --ignored --exclude-standard で無視されているファイルを取得
+ignored_files=$(git ls-files --others --ignored --exclude-standard)
+staged_ignored=$(git diff --cached --name-only | grep -Fxf <(echo "$ignored_files"))
+
+if [ -n "$staged_ignored" ]; then
+    echo "--------------------------------------------------"
+    echo "ERROR: .gitignore対象ファイルがコミットされようとしています。"
+    echo "以下のファイルは .gitignore で除外されていますが、stagedに含まれています:"
+    echo "$staged_ignored"
+    echo ".gitignoreの設定を尊重し、これらのファイルをコミットから除外してください。"
+    echo "--------------------------------------------------"
+    exit 1
+fi
+
+# ============================================
+# ファイル形式チェック（エンコーディング・改行コード・末尾改行）
+# ============================================
+# stagedされたファイルを取得
+staged_files=$(git diff --cached --name-only --diff-filter=ACM)
+
+for file in $staged_files; do
+    # バイナリファイルはスキップ
+    if git diff --cached --numstat "$file" | grep -q '^-' ; then
+        continue
+    fi
+
+    # ファイルが存在するか確認
+    if [ ! -f "$file" ]; then
+        continue
+    fi
+
+    # バイナリチェック（fileコマンド）
+    file_type=$(file "$file" --mime-type)
+    if echo "$file_type" | grep -q 'text/'; then
+        # テキストファイルのみチェック
+
+        # BOMチェック
+        if [ "$(head -c 3 "$file" | od -A n -t x1 | tr -d ' ')" = "efbbbf" ]; then
+            echo "--------------------------------------------------"
+            echo "ERROR: $file にUTF-8 BOMが含まれています。"
+            echo "BOMなしのUTF-8（BOMなし）を使用してください。"
+            echo "--------------------------------------------------"
+            exit 1
+        fi
+
+        # 改行コードチェック（CRLF禁止）
+        if file "$file" | grep -q 'CRLF'; then
+            echo "--------------------------------------------------"
+            echo "ERROR: $file にCRLF改行が含まれています。"
+            echo "LF改行のみを使用してください。"
+            echo "--------------------------------------------------"
+            exit 1
+        fi
+
+        # 末尾改行チェック
+        if [ "$(tail -c 1 "$file" | wc -l)" -eq 0 ]; then
+            echo "--------------------------------------------------"
+            echo "ERROR: $file の末尾に改行がありません。"
+            echo "すべてのコードファイル末尾に改行（LF）を入れてください。"
+            echo "--------------------------------------------------"
+            exit 1
+        fi
+    fi
+done
+
+# ============================================
+# 秘匿情報チェック
+# ============================================
+# stagedされたファイルの内容をチェック
+for file in $staged_files; do
+    if [ ! -f "$file" ]; then
+        continue
+    fi
+
+    # バイナリファイルはスキップ
+    file_type=$(file "$file" --mime-type)
+    if ! echo "$file_type" | grep -q 'text/'; then
+        continue
+    fi
+
+    # 秘匿情報パターン
+    patterns=(
+        "api[_-]?key\s*=\s*['\"][^'\"]+['\"]"
+        "api[_-]?secret\s*=\s*['\"][^'\"]+['\"]"
+        "password\s*=\s*['\"][^'\"]+['\"]"
+        "token\s*=\s*['\"][^'\"]+['\"]"
+        "secret[_-]?key\s*=\s*['\"][^'\"]+['\"]"
+        "access[_-]?token\s*=\s*['\"][^'\"]+['\"]"
+        "refresh[_-]?token\s*=\s*['\"][^'\"]+['\"]"
+        "private[_-]?key\s*=\s*['\"][^'\"]+['\"]"
+        "aws[_-]?access[_-]?key[_-]?id\s*=\s*['\"][^'\"]+['\"]"
+        "aws[_-]?secret[_-]?access[_-]?key\s*=\s*['\"][^'\"]+['\"]"
+    )
+
+    for pattern in "${patterns[@]}"; do
+        if grep -iE "$pattern" "$file" > /dev/null 2>&1; then
+            echo "--------------------------------------------------"
+            echo "ERROR: $file に秘匿情報が含まれている可能性があります。"
+            echo "パターン: $pattern"
+            echo "秘匿情報は環境変数またはSecret Managerを使用してください。"
+            echo "コード・ログ・コミットに含めないでください。"
+            echo "--------------------------------------------------"
+            exit 1
+        fi
+    done
+done
+
+# ============================================
+# CI/CDシークレットチェック
+# ============================================
+# CI設定ファイル（.github/workflows/*.yml, .gitlab-ci.yml等）のシークレット直書きチェック
+ci_patterns=(
+    "\${{ secrets\."
+    "\$CI_"
+    "password:"
+    "token:"
+)
+
+for file in $staged_files; do
+    if [ ! -f "$file" ]; then
+        continue
+    fi
+
+    # CI設定ファイルのみチェック
+    if echo "$file" | grep -qE '\.(github|gitlab)'; then
+        for pattern in "${ci_patterns[@]}"; do
+            if grep -iE "$pattern" "$file" > /dev/null 2>&1; then
+                echo "--------------------------------------------------"
+                echo "ERROR: $file にシークレットが直書きされている可能性があります。"
+                echo "CI/CDシークレットは環境変数またはSecret Managerを使用してください。"
+                echo "CI設定ファイルにシークレットを直書きしないでください。"
+                echo "--------------------------------------------------"
+                exit 1
+            fi
+        done
+    fi
+done
