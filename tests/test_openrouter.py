@@ -111,11 +111,11 @@ class TestOpenRouterAdapter:
         mock_response.status_code = 200
         mock_response.is_success = True
         
-        async def mock_aiter_bytes():
-            yield b"data: chunk1\n\n"
-            yield b"data: chunk2\n\n"
+        async def mock_aiter_lines():
+            yield 'data: {"choices": [{"delta": {"content": "test"}}]}'
+            yield "data: [DONE]"
         
-        mock_response.aiter_bytes = mock_aiter_bytes
+        mock_response.aiter_lines = mock_aiter_lines
         
         mock_client_instance = MagicMock()
         mock_client_instance.build_request.return_value = MagicMock()
@@ -128,8 +128,8 @@ class TestOpenRouterAdapter:
                 chunks.append(chunk)
             
             assert len(chunks) == 2
-            assert chunks[0] == b"data: chunk1\n\n"
-            assert chunks[1] == b"data: chunk2\n\n"
+            assert b"data: " in chunks[0]
+            assert chunks[1] == b"data: [DONE]\n\n"
 
     @pytest.mark.asyncio
     async def test_chat_completion_stream_rate_limit(self):

@@ -1,3 +1,4 @@
+import json
 from typing import AsyncGenerator
 
 import httpx
@@ -36,7 +37,18 @@ class OpenRouterAdapter(AbstractLLMAdapter):
             raise RateLimitError(f"OpenRouter 429 ({model})")
         if not resp.is_success:
             raise ProviderError(f"OpenRouter {resp.status_code} ({model}): {resp.text[:200]}")
-        return resp.json()
+
+        response = resp.json()
+        return self._normalize_response(response)
+
+    def _normalize_response(self, response: dict) -> dict:
+        """OpenRouter 固有のフィールドを削除して OpenAI 互換にする"""
+        if "choices" in response and len(response["choices"]) > 0:
+            message = response["choices"][0].get("message", {})
+            # OpenRouter 固有のフィールドを削除
+            message.pop("reasoning", None)
+            message.pop("reasoning_details", None)
+        return response
 
     async def chat_completion_stream(
         self, payload: dict, model: str, timeout: float
@@ -59,10 +71,30 @@ class OpenRouterAdapter(AbstractLLMAdapter):
                 err = await resp.aread()
                 raise ProviderError(f"OpenRouter {resp.status_code} ({model}): {err[:200]}")
 
-            async for chunk in resp.aiter_bytes():
-                if chunk:
-                    yield chunk
+            async for line in resp.aiter_lines():
+                if line.startswith("data: "):
+                    data_str = line[6:]  # "data: " を削除
+                    if data_str == "[DONE]":
+                        yield b"data: [DONE]\n\n"
+                        continue
+                    try:
+                        data = json.loads(data_str)
+                        data = self._normalize_stream_chunk(data)
+                        yield f"data: {json.dumps(data, ensure_ascii=False)}\n\n".encode("utf-8")
+                    except json.JSONDecodeError:
+                        yield f"{line}\n\n".encode("utf-8")
+                elif line:
+                    yield f"{line}\n\n".encode("utf-8")
         except httpx.TimeoutException as exc:
             raise ProviderTimeoutError(f"OpenRouter timeout ({model})") from exc
         finally:
             await client.aclose()
+
+    def _normalize_stream_chunk(self, chunk: dict) -> dict:
+        """ストリーミングチャンクから OpenRouter 固有のフィールドを削除"""
+        if "choices" in chunk and len(chunk["choices"]) > 0:
+            delta = chunk["choices"][0].get("delta", {})
+            # OpenRouter 固有のフィールドを削除
+            delta.pop("reasoning", None)
+            delta.pop("reasoning_details", None)
+        return chunk
