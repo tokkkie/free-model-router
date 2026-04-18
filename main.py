@@ -30,6 +30,7 @@ if not openrouter_api_key:
 model_router = ModelRouter(
     openrouter_base_url=config["openrouter_base_url"],
     priority_keywords=config["priority_keywords"],
+    exclude_keywords=config.get("exclude_keywords"),
     cache_ttl=config["model_cache_ttl_seconds"],
 )
 

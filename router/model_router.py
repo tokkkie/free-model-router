@@ -11,10 +11,12 @@ class ModelRouter:
         self,
         openrouter_base_url: str,
         priority_keywords: list[dict[str, Any]],
+        exclude_keywords: list[str] | None = None,
         cache_ttl: int = 300,
     ) -> None:
         self._base_url = openrouter_base_url.rstrip("/")
         self._priority_keywords = priority_keywords
+        self._exclude_keywords = exclude_keywords or []
         self._cache_ttl = cache_ttl
         self._cached_models: list[str] = []
         self._cache_time: float = 0.0
@@ -38,7 +40,8 @@ class ModelRouter:
             and m.get("pricing", {}).get("completion") == "0"
         ]
 
-        sorted_models = self._sort_by_priority(free_models)
+        filtered_models = self._filter_excluded(free_models)
+        sorted_models = self._sort_by_priority(filtered_models)
         self._cached_models = sorted_models
         self._cache_time = now
         return sorted_models
@@ -54,3 +57,19 @@ class ModelRouter:
             return 999
 
         return sorted(models, key=priority_score)
+
+    def _filter_excluded(self, models: list[str]) -> list[str]:
+        """除外キーワードに該当するモデルをフィルタリング"""
+        if not self._exclude_keywords:
+            return models
+
+        filtered = []
+        for model_id in models:
+            is_excluded = any(
+                keyword.lower() in model_id.lower()
+                for keyword in self._exclude_keywords
+            )
+            if not is_excluded:
+                filtered.append(model_id)
+
+        return filtered
