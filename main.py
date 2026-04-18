@@ -58,6 +58,9 @@ async def chat_completions(request: Request):
     payload = await request.json()
     stream = payload.get("stream", False)
 
+    # クライアントからの model パラメータを削除（サーバー側で自動選択）
+    payload.pop("model", None)
+
     models = await model_router.get_free_models()
     if not models:
         raise HTTPException(status_code=503, detail="No free models available")
