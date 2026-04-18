@@ -2,6 +2,16 @@
 
 OpenRouter の無料モデル + Ollama ローカルモデルを束ね、自動 Failover する OpenAI 互換プロキシサーバー。
 
+## 初回セットアップ
+
+ローカルのプロジェクトルートで初回のみ以下を実行してください：
+
+```bash
+# Git hooksの参照先をリポジトリ内の.githooksに変更し、実行権限を付与
+git config core.hooksPath .githooks
+chmod +x .githooks/pre-commit .githooks/pre-push
+```
+
 ## 特徴
 
 - **OpenAI 互換 API** (`/v1/chat/completions`)
