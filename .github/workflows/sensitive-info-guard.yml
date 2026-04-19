@@ -49,12 +49,32 @@ jobs:
             const cm = context.payload.comment;
             if (cm) texts.push(['comment', cm.body ?? '']);
 
+            // --- 自リポ参照マスク & ビルトイン: 同owner他リポ参照検出 ---
+            const selfOwner = context.repo.owner;
+            const selfName = context.repo.repo;
+            const esc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            const ownerRe = esc(selfOwner);
+            const nameRe = esc(selfName);
+            const maskSelf = (text) => text
+              .replace(new RegExp(`(^|[^A-Za-z0-9_.-])${ownerRe}/${nameRe}([^A-Za-z0-9_.-]|$)`, 'g'), '$1[SELF]$2')
+              .replace(new RegExp(`https?://github\\.com/${ownerRe}/${nameRe}(?:[#/?][^\\s]*)?`, 'g'), '[SELF_URL]');
+            const builtinPattern = new RegExp(
+              `(?:^|[^A-Za-z0-9_.-])${ownerRe}/[A-Za-z0-9_.-]+|https?://github\\.com/${ownerRe}/[A-Za-z0-9_.-]+`
+            );
+
             const blocks = [];
             const warns = [];
 
-            for (const { type, pattern } of rules) {
-              for (const [loc, text] of texts) {
-                if (!text) continue;
+            for (const [loc, rawText] of texts) {
+              if (!rawText) continue;
+              const text = maskSelf(rawText);
+
+              // ビルトイン: 同 owner 配下の他リポ参照
+              if (builtinPattern.test(text)) {
+                blocks.push(`${loc}: [builtin] 同 owner '${selfOwner}' 配下の他リポジトリ参照は禁止`);
+              }
+
+              for (const { type, pattern } of rules) {
                 if (type === 'literal') {
                   if (text.includes(pattern)) {
                     blocks.push(`${loc}: [literal] ${pattern}`);

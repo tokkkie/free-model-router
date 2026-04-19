@@ -36,7 +36,10 @@ regex:(^|[^0-9.])172\.(1[6-9]|2[0-9]|3[01])\.[0-9]{1,3}\.[0-9]{1,3}([^0-9.]|$)
 # 社内 SaaS サブドメイン:
 #   regex:https?://[a-z0-9-]+\.slack\.com/
 
-# --- GitHub 他リポジトリ参照（汎用・警告のみ・誤検知防止） ---
-# 具体的な owner/repo を block したい場合は上記の literal で明示追記してください。
+# --- GitHub 他リポジトリ参照（第三者 owner 配下・警告のみ・誤検知防止） ---
+# 自リポ (owner/repo) の参照は scan-sensitive.sh / sensitive-info-guard.yml の
+# ビルトインマスク処理により除外されるため、ここでの警告対象にはなりません。
+# また、同 owner 配下の他リポジトリ参照はビルトインで block されるため、
+# 以下の warn-regex は主に第三者 (OSS 等) の owner/repo 参照に反応します。
 warn-regex:[A-Za-z0-9_-]+/[A-Za-z0-9_.-]+#[0-9]+
 warn-regex:https?://github\.com/[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+
