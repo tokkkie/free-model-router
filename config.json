@@ -9,9 +9,10 @@
   "tool_support_cache_file": "tool_support_cache.json",
   "exclude_keywords": ["dolphin", "liquid", "arcee"],
   "priority_keywords": [
-    {"keywords": ["120b", "405b"], "priority": 99},
-    {"keywords": ["20b", "24b", "27b", "30b", "31b"], "priority": 1},
-    {"keywords": ["70b", "80b"], "priority": 2},
-    {"keywords": ["3b", "4b", "7b", "9b", "12b"], "priority": 3}
+    {"keywords": ["nano", "mini", "lite"], "priority": 98},
+    {"keywords": ["50b", "60b", "70b", "80b", "90b"], "priority": 1},
+    {"keywords": ["30b", "32b", "33b", "34b", "40b", "49b"], "priority": 2},
+    {"keywords": ["100b", "120b", "140b", "200b", "235b", "400b", "405b"], "priority": 3},
+    {"keywords": ["10b", "11b", "12b", "13b", "14b", "17b", "20b"], "priority": 4}
   ]
 }
