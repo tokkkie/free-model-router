@@ -56,7 +56,7 @@ if 'router.model_router' not in sys.modules:
     model_router_module = ModuleType('router.model_router')
     
     class ModelRouter:
-        def __init__(self, openrouter_base_url: str, priority_keywords: list, cache_ttl: int = 300):
+        def __init__(self, openrouter_base_url: str, priority_keywords: list, exclude_keywords=None, cache_ttl: int = 300):
             pass
         
         async def get_free_models(self):
@@ -64,6 +64,48 @@ if 'router.model_router' not in sys.modules:
     
     model_router_module.ModelRouter = ModelRouter
     sys.modules['router.model_router'] = model_router_module
+
+# router.tool_support_registry
+if 'router.tool_support_registry' not in sys.modules:
+    tsr_module = ModuleType('router.tool_support_registry')
+
+    class ToolSupportRegistry:
+        def __init__(self, cache_file: str = "tool_support_cache.json"):
+            self._cache = {}
+
+        def get_unverified(self, models):
+            return []
+
+        def mark(self, model, supported):
+            pass
+
+        def is_supported(self, model):
+            return True
+
+        def filter_supported(self, models):
+            return list(models)
+
+        def unsupported_models(self):
+            return []
+
+        def prune(self, current_models):
+            return 0
+
+        def save(self):
+            pass
+
+    tsr_module.ToolSupportRegistry = ToolSupportRegistry
+    sys.modules['router.tool_support_registry'] = tsr_module
+
+# router.tool_verifier
+if 'router.tool_verifier' not in sys.modules:
+    tv_module = ModuleType('router.tool_verifier')
+
+    async def verify_tool_support(adapter, model, timeout):
+        return True
+
+    tv_module.verify_tool_support = verify_tool_support
+    sys.modules['router.tool_verifier'] = tv_module
 
 # router.failover
 if 'router.failover' not in sys.modules:

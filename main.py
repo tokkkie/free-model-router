@@ -11,6 +11,8 @@ from adapters.ollama import OllamaAdapter
 from adapters.openrouter import OpenRouterAdapter
 from router.failover import FailoverRouter
 from router.model_router import ModelRouter
+from router.tool_support_registry import ToolSupportRegistry
+from router.tool_verifier import verify_tool_support
 
 load_dotenv()
 
@@ -41,12 +43,53 @@ openrouter_adapter = OpenRouterAdapter(
 
 ollama_adapter = OllamaAdapter(base_url=config["ollama_base_url"])
 
+tool_support_registry = ToolSupportRegistry(
+    cache_file=config.get("tool_support_cache_file", "tool_support_cache.json")
+)
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("Fetching free models from OpenRouter...")
     models = await model_router.get_free_models()
     logger.info(f"Found {len(models)} free models")
+
+    pruned = tool_support_registry.prune(models)
+    if pruned:
+        logger.info(f"Pruned {pruned} stale models from tool support cache")
+
+    if config.get("verify_tool_support", True):
+        unverified = tool_support_registry.get_unverified(models)
+        if unverified:
+            logger.info(
+                f"{len(unverified)} new models detected, verifying tool support..."
+            )
+            verify_timeout = float(config.get("verify_timeout_seconds", 15))
+            for m in unverified:
+                result = await verify_tool_support(
+                    openrouter_adapter, m, verify_timeout
+                )
+                if result is None:
+                    logger.info(
+                        f"  ? {m} (verification deferred, will retry next startup)"
+                    )
+                elif result:
+                    tool_support_registry.mark(m, True)
+                    logger.info(f"  OK  {m}")
+                else:
+                    tool_support_registry.mark(m, False)
+                    logger.warning(
+                        f"  NG  {m} - tool calling NOT supported (auto-excluded)"
+                    )
+            tool_support_registry.save()
+
+    unsupported = tool_support_registry.unsupported_models()
+    if unsupported:
+        logger.warning(
+            "以下のモデルはツール呼び出しに非対応のため自動除外されます "
+            f"({len(unsupported)} 件): {unsupported}"
+        )
+
     yield
 
 
@@ -63,6 +106,7 @@ async def chat_completions(request: Request):
     payload.pop("model", None)
 
     models = await model_router.get_free_models()
+    models = tool_support_registry.filter_supported(models)
     if not models:
         raise HTTPException(status_code=503, detail="No free models available")
 
