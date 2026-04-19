@@ -1,0 +1,75 @@
+name: PR Body Validator
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened]
+
+permissions:
+  pull-requests: read
+  contents: read
+
+jobs:
+  validate:
+    name: validate
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate PR title and body
+        env:
+          TITLE: ${{ github.event.pull_request.title }}
+          BODY: ${{ github.event.pull_request.body }}
+        run: |
+          set -u
+          errors=0
+
+          # --- タイトル prefix チェック ---
+          # AGENTS.md 規約: `prefix: 説明` 形式。prefix は feat/fix/chore/docs/refactor/test/perf/style/ci/build/revert
+          title_regex='^(feat|fix|chore|docs|refactor|test|perf|style|ci|build|revert)(\([^)]+\))?!?: .+'
+          if ! printf '%s' "$TITLE" | grep -qE "$title_regex"; then
+            echo "::error title=Invalid PR Title::PRタイトルは '<prefix>: <説明>' 形式が必須です。"
+            echo "  許可される prefix: feat|fix|chore|docs|refactor|test|perf|style|ci|build|revert"
+            echo "  現在のタイトル : ${TITLE}"
+            errors=$((errors + 1))
+          fi
+
+          # --- 本文の存在チェック ---
+          if [ -z "${BODY:-}" ]; then
+            echo "::error title=Empty PR Body::PR本文が空です。.github/pull_request_template.md を埋めてください。"
+            exit 1
+          fi
+
+          # HTMLコメント除去（1行内 <!-- ... --> と複数行コメント）
+          clean=$(printf '%s' "$BODY" | sed -E 's/<!--[^>]*-->//g' | awk '
+            /<!--/ { in_c = 1 }
+            !in_c { print }
+            /-->/ { in_c = 0 }
+          ')
+
+          # セクション存在＋実質内容チェック
+          check_section() {
+            name="$1"
+            content=$(printf '%s\n' "$clean" | awk -v h="$name" '
+              $0 ~ "^##[[:space:]]+"h"[[:space:]]*$" { flag = 1; next }
+              flag && /^##[[:space:]]+/ { flag = 0 }
+              flag { print }
+            ')
+            # 空白・ハイフン・改行を除いた後に文字が残らなければ空扱い
+            meaningful=$(printf '%s' "$content" | tr -d '[:space:]-')
+            if [ -z "$meaningful" ]; then
+              echo "::error title=Missing Section::セクション「## ${name}」が欠落または空です。"
+              return 1
+            fi
+            return 0
+          }
+
+          check_section "概要"     || errors=$((errors + 1))
+          check_section "変更内容" || errors=$((errors + 1))
+          check_section "テスト"   || errors=$((errors + 1))
+
+          if [ "$errors" -gt 0 ]; then
+            echo ""
+            echo "検証失敗: ${errors} 件のエラー"
+            echo "参照: AGENTS.md / .github/pull_request_template.md"
+            exit 1
+          fi
+
+          echo "OK: PRタイトル/本文の検証を通過しました。"
