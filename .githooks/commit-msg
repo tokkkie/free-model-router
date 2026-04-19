@@ -42,16 +42,17 @@ fi
 # prefix の取得
 prefix=$(echo "$commit_msg_filtered" | cut -d':' -f1)
 
-# 一般的な prefix リスト（警告のみ、強制はしない）
+# 許可される prefix リスト（AGENTS.md 規約により強制）
 common_prefixes="fix|feat|refactor|docs|chore|test|style|perf|ci|build|revert"
 
 if ! echo "$prefix" | grep -qE "^($common_prefixes)$"; then
     echo "--------------------------------------------------"
-    echo "WARNING: コミットメッセージのprefixが一般的ではありません。"
-    echo "一般的なprefix: fix, feat, refactor, docs, chore, test, style, perf, ci, build, revert"
+    echo "ERROR: コミットメッセージのprefixが許可されていません。"
+    echo "許可されるprefix: fix, feat, refactor, docs, chore, test, style, perf, ci, build, revert"
     echo "現在のprefix: $prefix"
+    echo "現在のメッセージ: $commit_msg_filtered"
     echo "--------------------------------------------------"
-    # 警告のみで続行
+    exit 1
 fi
 
 # メッセージ長チェック（長すぎるメッセージを警告）
