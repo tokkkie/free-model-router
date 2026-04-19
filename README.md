@@ -22,6 +22,7 @@ chmod +x .githooks/pre-commit .githooks/pre-push .githooks/commit-msg
 - **自動リトライ (Failover)** — 429 / タイムアウト時に次モデルへ切替
 - **ローカル最終防衛線** — 全クラウドモデル失敗時は Ollama へフォールバック
 - **ストリーミング対応** — SSE 形式でリアルタイム応答
+- **ツール呼び出し自動検証** — 新規モデル検出時に function calling の可否を自動テストし、非対応モデルを自動除外
 
 ## ディレクトリ構造
 
@@ -38,8 +39,10 @@ openrouter-routing/
 │   └── ollama.py             # Ollama ローカル呼び出し
 │
 └── router/
-    ├── model_router.py       # モデルリスト取得・優先順位付け
-    └── failover.py           # 429/タイムアウト検知・次モデルへ切替
+    ├── model_router.py            # モデルリスト取得・優先順位付け
+    ├── failover.py                # 429/タイムアウト検知・次モデルへ切替
+    ├── tool_verifier.py           # モデルのツール呼び出し対応を検証
+    └── tool_support_registry.py   # ツール対応モデルのキャッシュ管理
 ```
 
 ## セットアップ
@@ -82,6 +85,17 @@ curl -X POST http://127.0.0.1:4141/v1/chat/completions \
 | `exclude_keywords` | 除外するモデルのキーワード（日本語に弱いモデル等） |
 | `priority_keywords` | モデル優先順位キーワード |
 | `ollama_model` | ローカル Fallback モデル名 |
+| `verify_tool_support` | 起動時に新規モデルのツール呼び出し対応を検証する（デフォルト `true`） |
+| `verify_timeout_seconds` | 検証リクエストのタイムアウト（秒） |
+| `tool_support_cache_file` | 検証結果のキャッシュファイル名 |
+
+### ツール呼び出し検証の動作
+
+- 起動時、OpenRouter のモデルリスト中 **キャッシュに未記録のモデル** のみ検証します
+- 簡単な function calling リクエストを送り、`tool_calls` が返るかを確認します
+- 非対応と判定されたモデルは以降のリクエストから自動除外されます
+- 検証に失敗（429 / タイムアウト等）した場合は判定保留とし、次回起動時に再試行します
+- キャッシュファイル（`tool_support_cache.json`）は Git 管理外です
 
 ## Roo Code での使用
 

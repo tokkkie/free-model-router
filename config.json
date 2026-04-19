@@ -4,6 +4,9 @@
   "openrouter_base_url": "https://openrouter.ai/api/v1",
   "ollama_base_url": "http://localhost:11434",
   "ollama_model": "phi3.5:latest",
+  "verify_tool_support": true,
+  "verify_timeout_seconds": 15,
+  "tool_support_cache_file": "tool_support_cache.json",
   "exclude_keywords": ["dolphin", "liquid", "arcee"],
   "priority_keywords": [
     {"keywords": ["120b", "405b"], "priority": 99},
