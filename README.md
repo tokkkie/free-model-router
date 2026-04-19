@@ -88,6 +88,7 @@ curl -X POST http://127.0.0.1:4141/v1/chat/completions \
 | `verify_tool_support` | 起動時に新規モデルのツール呼び出し対応を検証する（デフォルト `true`） |
 | `verify_timeout_seconds` | 検証リクエストのタイムアウト（秒） |
 | `tool_support_cache_file` | 検証結果のキャッシュファイル名 |
+| `rate_limit_cooldown_seconds` | 429 を返したモデルをスキップする秒数（デフォルト `60`、`0` で無効化） |
 
 ### ツール呼び出し検証の動作
 

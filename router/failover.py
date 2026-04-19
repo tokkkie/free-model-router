@@ -1,4 +1,5 @@
 import logging
+import time
 from typing import AsyncIterator
 
 from adapters.base import (
@@ -14,17 +15,52 @@ logger = logging.getLogger(__name__)
 class FailoverRouter:
     """429 / タイムアウト発生時に次のモデルへ自動切替を行う"""
 
+    # 429 を返したモデルのクールダウン期限 (UNIX秒)。
+    # FailoverRouter はリクエストごとに再インスタンス化されるため
+    # クラス変数でプロセス内共有する（再起動でリセット）
+    _cooldown_until: dict[str, float] = {}
+
     def __init__(
         self,
         cloud_adapter: AbstractLLMAdapter,
         local_adapter: AbstractLLMAdapter,
         local_model: str,
         timeout: float,
+        cooldown_seconds: float = 60.0,
     ) -> None:
         self._cloud_adapter = cloud_adapter
         self._local_adapter = local_adapter
         self._local_model = local_model
         self._timeout = timeout
+        self._cooldown_seconds = cooldown_seconds
+
+    def _is_cooling_down(self, model: str) -> bool:
+        """モデルがクールダウン期間中かを判定"""
+        expires = self._cooldown_until.get(model)
+        if expires is None:
+            return False
+        if time.monotonic() >= expires:
+            # 期限切れエントリを掃除
+            self._cooldown_until.pop(model, None)
+            return False
+        return True
+
+    def _mark_cooldown(self, model: str) -> None:
+        """モデルを cooldown_seconds 秒間スキップ対象にする"""
+        if self._cooldown_seconds <= 0:
+            return
+        self._cooldown_until[model] = time.monotonic() + self._cooldown_seconds
+        logger.info(
+            f"Model {model} is on cooldown for {self._cooldown_seconds:.0f}s"
+        )
+
+    def _filter_available(self, models: list[str]) -> list[str]:
+        """クールダウン中のモデルを除外"""
+        available = [m for m in models if not self._is_cooling_down(m)]
+        skipped = len(models) - len(available)
+        if skipped:
+            logger.info(f"Skipping {skipped} model(s) on cooldown")
+        return available
 
     async def execute_with_failover(
         self,
@@ -43,14 +79,20 @@ class FailoverRouter:
     ) -> dict:
         """非ストリーミングリクエストのFailover処理"""
         last_error: Exception | None = None
+        available_models = self._filter_available(models)
 
-        for model in models:
+        for model in available_models:
             try:
                 logger.info(f"Trying model: {model}")
                 return await self._cloud_adapter.chat_completion(
                     payload, model, self._timeout
                 )
-            except (RateLimitError, ProviderTimeoutError) as exc:
+            except RateLimitError as exc:
+                logger.warning(f"Model {model} failed: {exc}")
+                self._mark_cooldown(model)
+                last_error = exc
+                continue
+            except ProviderTimeoutError as exc:
                 logger.warning(f"Model {model} failed: {exc}")
                 last_error = exc
                 continue
@@ -75,8 +117,9 @@ class FailoverRouter:
     ) -> AsyncIterator[bytes]:
         """ストリーミングリクエストのFailover処理"""
         last_error: Exception | None = None
+        available_models = self._filter_available(models)
 
-        for model in models:
+        for model in available_models:
             try:
                 logger.info(f"Trying model: {model}")
                 stream_gen = self._cloud_adapter.chat_completion_stream(
@@ -85,7 +128,12 @@ class FailoverRouter:
                 async for chunk in stream_gen:
                     yield chunk
                 return
-            except (RateLimitError, ProviderTimeoutError) as exc:
+            except RateLimitError as exc:
+                logger.warning(f"Model {model} failed: {exc}")
+                self._mark_cooldown(model)
+                last_error = exc
+                continue
+            except ProviderTimeoutError as exc:
                 logger.warning(f"Model {model} failed: {exc}")
                 last_error = exc
                 continue

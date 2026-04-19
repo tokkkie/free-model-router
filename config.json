@@ -7,6 +7,7 @@
   "verify_tool_support": true,
   "verify_timeout_seconds": 15,
   "tool_support_cache_file": "tool_support_cache.json",
+  "rate_limit_cooldown_seconds": 60,
   "exclude_keywords": ["dolphin", "liquid", "arcee"],
   "priority_keywords": [
     {"keywords": ["nano", "mini", "lite"], "priority": 98},
