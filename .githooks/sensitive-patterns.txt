@@ -1,0 +1,42 @@
+# 機密情報・環境固有情報の検出パターン定義
+#
+# 書式: <type>:<pattern>
+#   literal    : 固定文字列マッチ（検出時 block）
+#   regex      : 正規表現マッチ（検出時 block, grep -E 相当）
+#   warn-regex : 正規表現マッチ（警告のみ、block しない）
+#
+# '#' で始まる行と空行はコメント扱い。
+# hooks (.githooks/lib/scan-sensitive.sh) と
+# Actions (.github/workflows/sensitive-info-guard.yml) の両方から参照される。
+
+# --- ローカルパス（ユーザー名や環境を示唆する絶対パス） ---
+regex:/home/[A-Za-z0-9_.-]+/
+regex:/Users/[A-Za-z0-9_.-]+/
+regex:[A-Za-z]:\\Users\\[A-Za-z0-9_.-]+\\
+
+# --- プライベートネットワーク (RFC1918) ---
+regex:(^|[^0-9.])192\.168\.[0-9]{1,3}\.[0-9]{1,3}([^0-9.]|$)
+regex:(^|[^0-9.])10\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}([^0-9.]|$)
+regex:(^|[^0-9.])172\.(1[6-9]|2[0-9]|3[01])\.[0-9]{1,3}\.[0-9]{1,3}([^0-9.]|$)
+
+# --- プロジェクト固有の追記エリア ---
+# 以下のカテゴリについて、自プロジェクトで該当する識別子を追記してください。
+# 詳細な書式・運用は .githooks/README.md を参照。
+#
+# プライベートリポジトリ識別子:
+#   literal:your-org/your-private-repo
+#
+# 社内ホスト名・ドメイン:
+#   literal:internal.example.com
+#   literal:ci.example.corp
+#
+# 内部プロジェクト識別子・チケット番号体系:
+#   regex:\bINTERNAL-[A-Z0-9]+\b
+#
+# 社内 SaaS サブドメイン:
+#   regex:https?://[a-z0-9-]+\.slack\.com/
+
+# --- GitHub 他リポジトリ参照（汎用・警告のみ・誤検知防止） ---
+# 具体的な owner/repo を block したい場合は上記の literal で明示追記してください。
+warn-regex:[A-Za-z0-9_-]+/[A-Za-z0-9_.-]+#[0-9]+
+warn-regex:https?://github\.com/[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+

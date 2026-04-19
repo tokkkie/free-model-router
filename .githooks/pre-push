@@ -1,6 +1,11 @@
 #!/bin/sh
-protected_branch="main"
-# push先ブランチを判定
+# ============================================
+# main直接push禁止 + 機密情報スキャン（push range のcommit message）
+# ============================================
+. "$(dirname "$0")/lib/scan-sensitive.sh"
+
+zero="0000000000000000000000000000000000000000"
+
 while read local_ref local_sha remote_ref remote_sha
 do
     if [ "$remote_ref" = "refs/heads/main" ]; then
@@ -9,5 +14,47 @@ do
         echo "作業用ブランチからGitHub上でPRを作成してください。"
         echo "--------------------------------------------------"
         exit 1
+    fi
+
+    # 削除push（local_sha が 0）はスキャン不要
+    [ "$local_sha" = "$zero" ] && continue
+
+    # 新規ブランチpush: origin に既知のコミットに含まれない範囲のみ対象
+    if [ "$remote_sha" = "$zero" ]; then
+        range_cmd="git log --format=%B $local_sha --not --remotes=origin"
+    else
+        range_cmd="git log --format=%B ${remote_sha}..${local_sha}"
+    fi
+
+    msgs=$(eval "$range_cmd" 2>/dev/null)
+    [ -z "$msgs" ] && continue
+
+    if ! scan_sensitive_text "$msgs"; then
+        echo "--------------------------------------------------" >&2
+        echo "ERROR: push対象コミットメッセージに機密情報の可能性があるパターンを検出しました。" >&2
+        echo "対象範囲: $range_cmd" >&2
+        echo "該当コミットを修正（git rebase -i 等）してから再pushしてください。" >&2
+        echo "パターン定義: .githooks/sensitive-patterns.txt" >&2
+        echo "--------------------------------------------------" >&2
+        exit 1
+    fi
+
+    # ============================================
+    # gitleaks による既知シークレット検出（optional、push range）
+    # ============================================
+    # amend/rebase 後の最終ローカル砦。未インストール時は CI が最終ゲート。
+    if command -v gitleaks >/dev/null 2>&1; then
+        if [ "$remote_sha" = "$zero" ]; then
+            gl_log_opts="$local_sha --not --remotes=origin"
+        else
+            gl_log_opts="${remote_sha}..${local_sha}"
+        fi
+        if ! gitleaks detect --no-banner --redact --log-opts="$gl_log_opts" 2>/dev/null; then
+            echo "--------------------------------------------------" >&2
+            echo "ERROR: push対象のcommitでgitleaksがシークレットを検出しました。" >&2
+            echo "対象範囲: $gl_log_opts" >&2
+            echo "--------------------------------------------------" >&2
+            exit 1
+        fi
     fi
 done

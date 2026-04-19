@@ -1,0 +1,105 @@
+name: Sensitive Info Guard
+
+on:
+  pull_request:
+    types: [opened, edited, reopened, synchronize, ready_for_review]
+  push:
+  issue_comment:
+    types: [created, edited]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Scan PR text for sensitive patterns
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const path = '.githooks/sensitive-patterns.txt';
+
+            if (!fs.existsSync(path)) {
+              core.info('No .githooks/sensitive-patterns.txt found; skipping.');
+              return;
+            }
+
+            const rules = fs.readFileSync(path, 'utf8')
+              .split(/\r?\n/)
+              .map(l => l.trim())
+              .filter(l => l && !l.startsWith('#'))
+              .map(l => {
+                const i = l.indexOf(':');
+                if (i < 0) return null;
+                return { type: l.slice(0, i).trim(), pattern: l.slice(i + 1) };
+              })
+              .filter(r => r && r.pattern);
+
+            const texts = [];
+            const pr = context.payload.pull_request;
+            if (pr) {
+              texts.push(['pr.title', pr.title ?? '']);
+              texts.push(['pr.body', pr.body ?? '']);
+            }
+            const cm = context.payload.comment;
+            if (cm) texts.push(['comment', cm.body ?? '']);
+
+            const blocks = [];
+            const warns = [];
+
+            for (const { type, pattern } of rules) {
+              for (const [loc, text] of texts) {
+                if (!text) continue;
+                if (type === 'literal') {
+                  if (text.includes(pattern)) {
+                    blocks.push(`${loc}: [literal] ${pattern}`);
+                  }
+                } else if (type === 'regex') {
+                  try {
+                    if (new RegExp(pattern).test(text)) {
+                      blocks.push(`${loc}: [regex] ${pattern}`);
+                    }
+                  } catch (e) {
+                    core.warning(`invalid regex: ${pattern} (${e.message})`);
+                  }
+                } else if (type === 'warn-regex') {
+                  try {
+                    if (new RegExp(pattern).test(text)) {
+                      warns.push(`${loc}: ${pattern}`);
+                    }
+                  } catch (e) {
+                    core.warning(`invalid regex: ${pattern} (${e.message})`);
+                  }
+                }
+              }
+            }
+
+            if (warns.length) {
+              core.warning('潜在的な他リポジトリ参照を検出:\n' + warns.join('\n'));
+            }
+            if (blocks.length) {
+              core.setFailed(
+                '機密情報・環境固有情報パターンを検出しました。' +
+                'PR本文/タイトル/コメントから削除してください。\n' +
+                blocks.join('\n') +
+                '\nパターン定義: .githooks/sensitive-patterns.txt'
+              );
+            } else {
+              core.info('No sensitive patterns detected.');
+            }
+
+  gitleaks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Run gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

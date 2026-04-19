@@ -126,15 +126,21 @@ for file in $staged_files; do
 done
 
 # ============================================
-# CI/CDシークレットチェック
+# CI/CDシークレット直書きチェック
 # ============================================
-# CI設定ファイル（.github/workflows/*.yml, .gitlab-ci.yml等）のシークレット直書きチェック
-ci_patterns=(
-    "\${{ secrets\."
-    "\$CI_"
-    "password:"
-    "token:"
-)
+# CI設定ファイル（.github/workflows/*.yml, .gitlab-ci.yml等）に
+# シークレット値が「リテラル」として直書きされていないかを検査する。
+#
+# 方針:
+#   - `${{ secrets.* }}` / `${{ env.* }}` / `${{ vars.* }}` / `${{ inputs.* }}` 等の
+#     expression 参照は GitHub Actions 公式の正しい注入方法であり、検出対象外とする。
+#   - 検出対象は `password: "..."` や `token: "ghp_xxx"` のような **引用符付きリテラル値**。
+#   - 既知シークレット形式（AWS/GCP/Slack token 等）と高エントロピー値は
+#     gitleaks（本ファイル末尾で実行）および CI 側の gitleaks job が担当する。
+#
+# パターン: `(password|token|secret|api[_-]?key):` の直後に引用符付きリテラルが続く形。
+#           expression 参照 `${{ ... }}` を含む行は除外。
+ci_literal_pattern="^[[:space:]]*[A-Za-z0-9_-]*(password|token|secret|api[_-]?key)[A-Za-z0-9_-]*:[[:space:]]*[\"'][^\"']+[\"'][[:space:]]*\$"
 
 for file in $staged_files; do
     if [ ! -f "$file" ]; then
@@ -143,15 +149,62 @@ for file in $staged_files; do
 
     # CI設定ファイルのみチェック
     if echo "$file" | grep -qE '\.(github|gitlab)'; then
-        for pattern in "${ci_patterns[@]}"; do
-            if grep -iE "$pattern" "$file" > /dev/null 2>&1; then
-                echo "--------------------------------------------------"
-                echo "ERROR: $file にシークレットが直書きされている可能性があります。"
-                echo "CI/CDシークレットは環境変数またはSecret Managerを使用してください。"
-                echo "CI設定ファイルにシークレットを直書きしないでください。"
-                echo "--------------------------------------------------"
-                exit 1
-            fi
-        done
+        # expression 参照行 (`${{ ... }}` を含む行) を除外した上で、
+        # 引用符付きリテラル値を検出
+        hits=$(grep -inE "$ci_literal_pattern" "$file" | grep -vE '\$\{\{')
+        if [ -n "$hits" ]; then
+            echo "--------------------------------------------------"
+            echo "ERROR: $file にシークレットがリテラル値で直書きされている可能性があります。"
+            echo "CI/CDシークレットは \${{ secrets.* }} / \${{ vars.* }} 等の expression 参照を使用してください。"
+            echo "$hits" >&2
+            echo "--------------------------------------------------"
+            exit 1
+        fi
     fi
 done
+
+# ============================================
+# 機密情報・環境固有情報スキャン（汎用）
+# ============================================
+# ローカルパス、プライベートネットワーク、プライベートリポジトリ識別子等、
+# 環境固有情報が staged ファイルに混入していないかを検査する。
+# パターン定義: .githooks/sensitive-patterns.txt
+. "$(dirname "$0")/lib/scan-sensitive.sh"
+
+for file in $staged_files; do
+    [ ! -f "$file" ] && continue
+
+    file_type=$(file "$file" --mime-type)
+    echo "$file_type" | grep -q 'text/' || continue
+
+    # パターン定義ファイル自身は対象外（自己参照による誤検知回避）
+    case "$file" in
+        .githooks/sensitive-patterns.txt) continue ;;
+    esac
+
+    if ! scan_sensitive_file "$file"; then
+        echo "--------------------------------------------------" >&2
+        echo "ERROR: $file に機密情報の可能性があるパターンを検出しました。" >&2
+        echo "パターン定義: .githooks/sensitive-patterns.txt" >&2
+        echo "--------------------------------------------------" >&2
+        exit 1
+    fi
+done
+
+# ============================================
+# gitleaks による既知シークレット検出（optional）
+# ============================================
+# ローカルにインストールされていれば予防層として動作。
+# 未インストールでも CI (.github/workflows/sensitive-info-guard.yml) が最終ゲートとなる。
+if command -v gitleaks >/dev/null 2>&1; then
+    if ! gitleaks protect --staged --redact --no-banner; then
+        echo "--------------------------------------------------" >&2
+        echo "ERROR: gitleaks が既知のシークレットパターンを検出しました。" >&2
+        echo "該当箇所を削除してから再コミットしてください。" >&2
+        echo "--------------------------------------------------" >&2
+        exit 1
+    fi
+else
+    echo "INFO: gitleaks 未インストール（スキップ）。CI で最終チェックされます。"
+    echo "      推奨インストール: https://github.com/gitleaks/gitleaks#installing"
+fi
