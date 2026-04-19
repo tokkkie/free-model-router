@@ -9,8 +9,10 @@ OpenRouter の無料モデル + Ollama ローカルモデルを束ね、自動 F
 ```bash
 # Git hooksの参照先をリポジトリ内の.githooksに変更し、実行権限を付与
 git config core.hooksPath .githooks
-chmod +x .githooks/pre-commit .githooks/pre-push
+chmod +x .githooks/pre-commit .githooks/pre-push .githooks/commit-msg
 ```
+
+これにより、コミット時の文字コード、改行コード、命名規則、シークレット混入等のチェックが自動実行されます。
 
 ## 特徴
 
@@ -91,6 +93,14 @@ Roo Code の設定で以下を指定：
   "openai.api.key": "dummy"
 }
 ```
+
+## 開発ルール
+
+詳細は `AGENTS.md` を参照してください。
+
+- Git Hookで物理的に強制される制約に従う
+- 環境/Git制約違反時は `.githooks/` のエラーログに従い修正する
+- 機密情報（APIキー等）は `.env` で管理しハードコードしない
 
 ## ライセンス
 
