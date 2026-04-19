@@ -1,0 +1,7 @@
+# Roo Code Configuration
+
+Read and strictly follow the instructions in the following files before starting any task:
+- README.md (for project overview)
+- AGENTS.md (for development rules and constraints)
+
+Always prioritize the rules defined in AGENTS.md.
