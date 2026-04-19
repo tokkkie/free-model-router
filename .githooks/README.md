@@ -51,6 +51,30 @@ chmod +x .githooks/pre-commit .githooks/pre-push .githooks/commit-msg .githooks/
 
 ローカル install は **必須ではない** が、CI 待ちなく早期に検出できるため開発体験向上に寄与する。
 
+## 自リポジトリ外への非公開情報漏洩防止（ビルトイン）
+
+**作業中のリポジトリ** から動的に `owner` を検出し、**同 owner 配下の「他リポジトリ」への参照を自動的に block** します。パターン定義ファイルへの追記は不要で、新しいリポジトリを作成しても自動で保護対象になります。
+
+### 動作
+
+- 自リポ情報の取得源
+  - hook 実行時: `git config --get remote.origin.url` から `owner/repo` を抽出
+  - workflow 実行時: `$GITHUB_REPOSITORY` / `context.repo`
+- スキャン前に自リポ参照（`owner/repo`、`owner/repo#N`、`https://github.com/owner/repo/...`）を placeholder にマスク
+- マスク後のテキストに `${owner}/<任意>` 形式が残れば「同 owner 他リポ参照」として block
+- 他 owner のリポ参照（OSS 等）は block しない（既存 warn-regex で警告のみ）
+
+### 判定例（作業中リポが `acme/site-a` の場合）
+
+| 書いた内容 | 判定 |
+|---|---|
+| `acme/site-a`, `acme/site-a#42` | 許可（自リポ） |
+| `https://github.com/acme/site-a/pull/42` | 許可（自リポ） |
+| `acme/site-b`, `acme/internal-tools` | block（同 owner 他リポ） |
+| `torvalds/linux`, `https://github.com/octocat/hello-world` | 許可（警告のみ） |
+
+自リポ以外の `owner/repo` を個別に許可/拒否したい場合のみ `sensitive-patterns.txt` に `literal:owner/repo` を追記してください。
+
 ## 機密情報・環境固有情報の多層ガード
 
 Git/GitHub に永続化される全ての文字列への機密情報混入を、以下の層で防ぐ:
