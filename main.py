@@ -115,6 +115,7 @@ async def chat_completions(request: Request):
         local_adapter=ollama_adapter,
         local_model=config["ollama_model"],
         timeout=config["timeout_seconds"],
+        cooldown_seconds=float(config.get("rate_limit_cooldown_seconds", 60)),
     )
 
     result = await failover.execute_with_failover(payload, models, stream)
