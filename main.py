@@ -18,7 +18,7 @@ load_dotenv()
 
 logging.basicConfig(
     level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+    format="%(asctime)s [%(levelname)s] %(message)s",
 )
 logger = logging.getLogger(__name__)
 
@@ -42,6 +42,14 @@ openrouter_adapter = OpenRouterAdapter(
 )
 
 ollama_adapter = OllamaAdapter(base_url=config["ollama_base_url"])
+
+failover_router = FailoverRouter(
+    cloud_adapter=openrouter_adapter,
+    local_adapter=ollama_adapter,
+    local_model=config["ollama_model"],
+    timeout=config["timeout_seconds"],
+    cooldown_seconds=float(config.get("rate_limit_cooldown_seconds", 60)),
+)
 
 tool_support_registry = ToolSupportRegistry(
     cache_file=config.get("tool_support_cache_file", "tool_support_cache.json")
@@ -110,15 +118,7 @@ async def chat_completions(request: Request):
     if not models:
         raise HTTPException(status_code=503, detail="No free models available")
 
-    failover = FailoverRouter(
-        cloud_adapter=openrouter_adapter,
-        local_adapter=ollama_adapter,
-        local_model=config["ollama_model"],
-        timeout=config["timeout_seconds"],
-        cooldown_seconds=float(config.get("rate_limit_cooldown_seconds", 60)),
-    )
-
-    result = await failover.execute_with_failover(payload, models, stream)
+    result = await failover_router.execute_with_failover(payload, models, stream)
 
     if stream:
         return StreamingResponse(result, media_type="text/event-stream")

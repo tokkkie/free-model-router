@@ -50,16 +50,14 @@ class FailoverRouter:
         if self._cooldown_seconds <= 0:
             return
         self._cooldown_until[model] = time.monotonic() + self._cooldown_seconds
-        logger.info(
-            f"Model {model} is on cooldown for {self._cooldown_seconds:.0f}s"
-        )
+        logger.info(f"COOLDOWN {self._cooldown_seconds:.0f}s   {model}")
 
     def _filter_available(self, models: list[str]) -> list[str]:
         """クールダウン中のモデルを除外"""
         available = [m for m in models if not self._is_cooling_down(m)]
         skipped = len(models) - len(available)
         if skipped:
-            logger.info(f"Skipping {skipped} model(s) on cooldown")
+            logger.info(f"SKIP {skipped} on cooldown")
         return available
 
     async def execute_with_failover(
@@ -83,31 +81,34 @@ class FailoverRouter:
 
         for model in available_models:
             try:
-                logger.info(f"Trying model: {model}")
-                return await self._cloud_adapter.chat_completion(
+                result = await self._cloud_adapter.chat_completion(
                     payload, model, self._timeout
                 )
+                logger.info(f"200 OK   {model}")
+                return result
             except RateLimitError as exc:
-                logger.warning(f"Model {model} failed: {exc}")
+                logger.warning(f"429 Rate limit   {model}")
                 self._mark_cooldown(model)
                 last_error = exc
                 continue
             except ProviderTimeoutError as exc:
-                logger.warning(f"Model {model} failed: {exc}")
+                logger.warning(f"TIMEOUT   {model}")
                 last_error = exc
                 continue
             except ProviderError as exc:
-                logger.error(f"Model {model} non-retryable error: {exc}")
+                logger.error(f"{exc.status_code if hasattr(exc, 'status_code') else 'ERROR'} {str(exc)[:50]}   {model}")
                 last_error = exc
                 continue
 
-        logger.warning("All cloud models failed, falling back to local Ollama")
+        logger.warning("FALLBACK local")
         try:
-            return await self._local_adapter.chat_completion(
+            result = await self._local_adapter.chat_completion(
                 payload, self._local_model, self._timeout
             )
+            logger.info(f"200 OK (local)   {self._local_model}")
+            return result
         except Exception as exc:
-            logger.error(f"Local fallback failed: {exc}")
+            logger.error(f"FAIL local   {self._local_model}")
             raise ProviderError(
                 f"All providers failed. Last error: {last_error}"
             ) from last_error
@@ -121,36 +122,37 @@ class FailoverRouter:
 
         for model in available_models:
             try:
-                logger.info(f"Trying model: {model}")
                 stream_gen = self._cloud_adapter.chat_completion_stream(
                     payload, model, self._timeout
                 )
                 async for chunk in stream_gen:
                     yield chunk
+                logger.info(f"200 OK (stream)   {model}")
                 return
             except RateLimitError as exc:
-                logger.warning(f"Model {model} failed: {exc}")
+                logger.warning(f"429 Rate limit   {model}")
                 self._mark_cooldown(model)
                 last_error = exc
                 continue
             except ProviderTimeoutError as exc:
-                logger.warning(f"Model {model} failed: {exc}")
+                logger.warning(f"TIMEOUT   {model}")
                 last_error = exc
                 continue
             except ProviderError as exc:
-                logger.error(f"Model {model} non-retryable error: {exc}")
+                logger.error(f"{exc.status_code if hasattr(exc, 'status_code') else 'ERROR'} {str(exc)[:50]}   {model}")
                 last_error = exc
                 continue
 
-        logger.warning("All cloud models failed, falling back to local Ollama")
+        logger.warning("FALLBACK local")
         try:
             stream_gen = self._local_adapter.chat_completion_stream(
                 payload, self._local_model, self._timeout
             )
             async for chunk in stream_gen:
                 yield chunk
+            logger.info(f"200 OK (stream local)   {self._local_model}")
         except Exception as exc:
-            logger.error(f"Local fallback failed: {exc}")
+            logger.error(f"FAIL local   {self._local_model}")
             raise ProviderError(
                 f"All providers failed. Last error: {last_error}"
             ) from last_error
