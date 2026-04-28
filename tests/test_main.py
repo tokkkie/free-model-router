@@ -151,15 +151,13 @@ class TestMainAPI:
     async def test_chat_completions_non_streaming(self):
         """非ストリーミングのチャット補完が正しく動作する"""
         with patch("main.model_router") as mock_router:
-            with patch("main.FailoverRouter") as mock_failover_class:
+            with patch("main.failover_router") as mock_failover:
                 mock_router.get_free_models = AsyncMock(return_value=["model1", "model2"])
-                
-                mock_failover = MagicMock()
+
                 mock_failover.execute_with_failover = AsyncMock(
                     return_value={"choices": [{"message": {"content": "test"}}]}
                 )
-                mock_failover_class.return_value = mock_failover
-                
+
                 client = TestClient(app)
                 response = client.post(
                     "/v1/chat/completions",
@@ -168,7 +166,7 @@ class TestMainAPI:
                         "stream": False,
                     },
                 )
-                
+
                 assert response.status_code == 200
                 data = response.json()
                 assert "choices" in data
@@ -197,15 +195,13 @@ class TestMainAPI:
         async def mock_stream():
             yield b"data: chunk1\n\n"
             yield b"data: chunk2\n\n"
-        
+
         with patch("main.model_router") as mock_router:
-            with patch("main.FailoverRouter") as mock_failover_class:
+            with patch("main.failover_router") as mock_failover:
                 mock_router.get_free_models = AsyncMock(return_value=["model1"])
-                
-                mock_failover = MagicMock()
+
                 mock_failover.execute_with_failover = AsyncMock(return_value=mock_stream())
-                mock_failover_class.return_value = mock_failover
-                
+
                 client = TestClient(app)
                 response = client.post(
                     "/v1/chat/completions",
@@ -214,24 +210,22 @@ class TestMainAPI:
                         "stream": True,
                     },
                 )
-                
+
                 assert response.status_code == 200
                 assert response.headers["content-type"] == "text/event-stream; charset=utf-8"
 
     def test_openai_compatibility(self):
         """OpenAI 互換のリクエスト形式を受け付ける"""
         with patch("main.model_router") as mock_router:
-            with patch("main.FailoverRouter") as mock_failover_class:
+            with patch("main.failover_router") as mock_failover:
                 mock_router.get_free_models = AsyncMock(return_value=["model1"])
-                
-                mock_failover = MagicMock()
+
                 mock_failover.execute_with_failover = AsyncMock(
                     return_value={"choices": [{"message": {"content": "response"}}]}
                 )
-                mock_failover_class.return_value = mock_failover
-                
+
                 client = TestClient(app)
-                
+
                 # OpenAI 互換のリクエスト
                 response = client.post(
                     "/v1/chat/completions",
@@ -245,7 +239,7 @@ class TestMainAPI:
                         "max_tokens": 100,
                     },
                 )
-                
+
                 assert response.status_code == 200
 
 

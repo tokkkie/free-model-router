@@ -1,8 +1,11 @@
+import logging
 from typing import AsyncGenerator
 
 import httpx
 
 from .base import AbstractLLMAdapter, ProviderError, ProviderTimeoutError
+
+logger = logging.getLogger(__name__)
 
 
 class OllamaAdapter(AbstractLLMAdapter):

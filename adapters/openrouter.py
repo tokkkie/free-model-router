@@ -1,9 +1,12 @@
 import json
+import logging
 from typing import AsyncGenerator
 
 import httpx
 
 from .base import AbstractLLMAdapter, ProviderError, ProviderTimeoutError, RateLimitError
+
+logger = logging.getLogger(__name__)
 
 
 class OpenRouterAdapter(AbstractLLMAdapter):
