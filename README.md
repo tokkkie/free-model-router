@@ -1,9 +1,20 @@
 # Free Model Router
 
-An OpenAI-compatible proxy server that automatically routes requests across OpenRouter's free models with failover support, falling back to a local Ollama model when all cloud models fail.
+Free LLMs are great — until they aren't.
 
-- Currently supports OpenRouter only.
-- Ollama, Cerebras, Gemini, and other providers should work if they expose an OpenAI-compatible API — though providers without a model list API may require additional scraping.
+- Try a popular model → 429
+- Try another → 429
+- Try again → 429
+
+Annoying. So let's just automate that.
+
+Free Model Router cycles through OpenRouter's free models automatically.
+When one fails (429 or timeout), it moves on to the next without you doing anything.
+No more manual model switching. No more babysitting rate limits.
+
+If everything fails, it falls back to a local Ollama instance (basic implementation for now).
+
+Run it locally and point your OpenAI-compatible client at it. That's it.
 
 ## Features
 
@@ -96,4 +107,3 @@ All settings are in `config.json`:
 - Models that fail verification are automatically excluded from routing
 - If verification fails due to 429 or timeout, the result is left pending and retried on next startup
 - The cache file (`tool_support_cache.json`) is excluded from Git
- 
