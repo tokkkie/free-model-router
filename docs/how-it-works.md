@@ -1,12 +1,12 @@
-# システム動作解説
+# How It Works
 
-## 概要
+## Overview
 
-OpenRouter Routing Proxy は、複数の無料AIモデルを自動的に選択・フォールオーバーするプロキシサーバーです。
+Free Model Router is a proxy server that automatically selects and fails over across multiple free AI models.
 
-## 初回起動時の動作
+## Startup Behavior
 
-### モデルリスト取得フロー
+### Model List Fetch Flow
 
 ```mermaid
 sequenceDiagram
@@ -18,39 +18,39 @@ sequenceDiagram
 
     App->>MR: get_free_models()
     MR->>OR: GET /models
-    OR-->>MR: 全モデルリスト
-    MR->>MR: :free + pricing==0 で抽出
-    MR->>MR: exclude_keywords で除外
-    MR->>MR: priority_keywords でソート
-    MR-->>App: 優先順位付きFreeモデル
+    OR-->>MR: Full model list
+    MR->>MR: Filter by :free + pricing==0
+    MR->>MR: Exclude by exclude_keywords
+    MR->>MR: Sort by priority_keywords
+    MR-->>App: Prioritized free model list
 
     App->>TSR: prune(models)
-    TSR->>Cache: 存在しないモデルを削除
+    TSR->>Cache: Remove models no longer available
 
     App->>TSR: get_unverified(models)
-    TSR-->>App: 未検証モデル一覧
+    TSR-->>App: List of unverified models
 
-    loop 各未検証モデル
-        App->>OR: ツール対応テスト
-        OR-->>App: 結果
+    loop For each unverified model
+        App->>OR: Tool support test
+        OR-->>App: Result
         App->>TSR: mark(model, result)
     end
-    TSR->>Cache: 保存
+    TSR->>Cache: Save
 ```
 
-### 処理の詳細
+### Step-by-Step
 
-1. **モデル取得**: OpenRouterから全モデルを取得
-2. **Free抽出**: `:free` suffix + pricingが0のモデルを抽出
-3. **除外**: `exclude_keywords`（dolphin, liquid, arcee等）に該当するモデルを除外
-4. **ソート**: `priority_keywords` のpriority値でソート（小さいほど優先）
-5. **ツール検証**: 未検証モデルのツール対応をテストし永続キャッシュ
+1. **Fetch models**: Retrieve the full model list from OpenRouter
+2. **Filter free models**: Select models with `:free` suffix and pricing == 0
+3. **Exclude**: Remove models matching `exclude_keywords` (e.g. dolphin, liquid, arcee)
+4. **Sort**: Order by `priority_keywords` priority value (lower = higher priority)
+5. **Verify tools**: Test function calling support on unverified models and cache results
 
 ---
 
-## リクエスト時の動作
+## Request Handling
 
-### チャット補完リクエスト
+### Chat Completion Request
 
 ```mermaid
 sequenceDiagram
@@ -65,39 +65,39 @@ sequenceDiagram
     Client->>App: POST /v1/chat/completions
 
     App->>MR: get_free_models()
-    MR->>MR: メモリキャッシュ確認（TTL: 300秒）
-    MR-->>App: モデルリスト
+    MR->>MR: Check memory cache (TTL: 300s)
+    MR-->>App: Model list
 
     App->>TSR: filter_supported(models)
-    TSR-->>App: ツール対応モデルのみ
+    TSR-->>App: Tool-compatible models only
 
-    loop モデル順に試行
+    loop Try models in priority order
         App->>FR: execute_with_failover()
-        FR->>FR: クールダウン中を除外
+        FR->>FR: Skip models in cooldown
 
-        FR->>OR: chat_completion(model=1位)
+        FR->>OR: chat_completion(model=1st)
         alt 200 OK
-            OR-->>FR: 成功レスポンス
-            FR-->>App: 結果
-            App-->>Client: 応答
+            OR-->>FR: Success response
+            FR-->>App: Result
+            App-->>Client: Response
         else 429 Rate Limit
             OR-->>FR: 429
-            FR->>FR: COOLDOWN 120s設定
-            FR->>FR: 次のモデルへ
+            FR->>FR: Set COOLDOWN 120s
+            FR->>FR: Try next model
         else Timeout
-            FR->>FR: 次のモデルへ
+            FR->>FR: Try next model
         end
     end
 
-    alt 全モデル失敗
+    alt All models failed
         FR->>Ollama: chat_completion(local)
-        Ollama-->>FR: 結果
-        FR-->>App: 結果
-        App-->>Client: 応答
+        Ollama-->>FR: Result
+        FR-->>App: Result
+        App-->>Client: Response
     end
 ```
 
-### ストリーミングリクエスト
+### Streaming Request
 
 ```mermaid
 sequenceDiagram
@@ -108,34 +108,34 @@ sequenceDiagram
 
     Client->>App: POST /v1/chat/completions (stream=true)
 
-    loop 各モデル
+    loop Each model
         FR->>OR: chat_completion_stream()
-        alt 成功
-            OR-->>Client: チャンク逐次返却
-            OR-->>FR: 完了
-            FR-->>App: 終了
+        alt Success
+            OR-->>Client: Stream chunks
+            OR-->>FR: Done
+            FR-->>App: Exit
         else 429/Timeout
-            FR->>FR: 次のモデルへフォールオーバー
+            FR->>FR: Failover to next model
         end
     end
 ```
 
 ---
 
-## キャッシュ機構
+## Cache Summary
 
-| キャッシュ　　　 | 場所　　　　　　　　　　　　　 | 内容　　　　　　　　 | TTL/永続性　　　　　　　　　　 |
-| ------------------| --------------------------------| ----------------------| --------------------------------|
-| **モデルリスト** | メモリ (`_cached_models`)　　　| Freeモデル一覧　　　 | 300秒　　　　　　　　　　　　　|
-| **ツール対応**　 | `tool_support_cache.json`　　　| モデルごとの対応有無 | 永続　　　　　　　　　　　　　 |
-| **クールダウン** | クラス変数 (`_cooldown_until`) | 429モデルの休止状態　| プロセス内（再起動でリセット） |
-| **既知ベンダー** | `known_vendors.json`　　　　　 | 通知済みベンダー一覧 | 永続　　　　　　　　　　　　　 |
+| Cache | Location | Content | TTL / Persistence |
+|-------|----------|---------|-------------------|
+| **Model list** | Memory (`_cached_models`) | Free model list | 300 seconds |
+| **Tool support** | `tool_support_cache.json` | Per-model tool support flag | Persistent |
+| **Cooldown** | Class variable (`_cooldown_until`) | Rate-limited model state | In-process (reset on restart) |
+| **Known vendors** | `known_vendors.json` | List of notified vendors | Persistent |
 
 ---
 
-## フォールオーバーの動作例
+## Failover Example
 
-実際のログと対応する動作：
+Actual log output and corresponding behavior:
 
 ```
 2026-04-29 00:13:38,349 [WARNING] 429 Rate limit   qwen/qwen3-next-80b-a3b-instruct:free
@@ -149,17 +149,17 @@ sequenceDiagram
     participant qwen as qwen/...
     participant glm as glm/...
 
-    FR->>qwen: リクエスト
+    FR->>qwen: Request
     qwen-->>FR: 429 Rate Limit
-    FR->>FR: COOLDOWN 120s設定
-    FR->>glm: リクエスト
+    FR->>FR: Set COOLDOWN 120s
+    FR->>glm: Request
     glm-->>FR: 200 OK
-    FR-->>FR: 応答返却
+    FR-->>FR: Return response
 ```
 
 ---
 
-## 設定ファイル (`config.json`)
+## Configuration (`config.json`)
 
 ```json
 {
@@ -174,17 +174,15 @@ sequenceDiagram
 }
 ```
 
-### キー設定の説明
-
-- **`exclude_keywords`**: 除外するモデル名のキーワード
-- **`priority_keywords`**: 優先順位付けルール（priority値が小さいほど先頭）
-- **`rate_limit_cooldown_seconds`**: 429発生時の休止時間（秒）
+- **`exclude_keywords`**: Model name keywords to exclude from routing
+- **`priority_keywords`**: Priority rules — lower value = higher priority
+- **`rate_limit_cooldown_seconds`**: How long to skip a model after a 429
 
 ---
 
-## まとめ
+## Summary
 
-1. **起動時**: Freeモデルを取得・整列・ツール検証
-2. **リクエスト時**: 上位モデルから順に試行、429は自動休止
-3. **フォールバック**: 全モデル失敗時はローカルOllamaへ
-4. **クールダウン**: 429モデルを120秒間自動スキップ
+1. **Startup**: Fetch free models, sort by priority, verify tool support
+2. **Per request**: Try models in order, auto-skip on 429
+3. **Fallback**: Route to local Ollama when all cloud models fail
+4. **Cooldown**: Automatically skip rate-limited models for 120 seconds
