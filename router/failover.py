@@ -4,6 +4,7 @@ from typing import AsyncIterator
 
 from adapters.base import (
     AbstractLLMAdapter,
+    NotFoundError,
     ProviderError,
     ProviderTimeoutError,
     RateLimitError,
@@ -27,12 +28,14 @@ class FailoverRouter:
         local_model: str,
         timeout: float,
         cooldown_seconds: float = 60.0,
+        not_found_cooldown_seconds: float = 600.0,
     ) -> None:
         self._cloud_adapter = cloud_adapter
         self._local_adapter = local_adapter
         self._local_model = local_model
         self._timeout = timeout
         self._cooldown_seconds = cooldown_seconds
+        self._not_found_cooldown_seconds = not_found_cooldown_seconds
 
     def _is_cooling_down(self, model: str) -> bool:
         """モデルがクールダウン期間中かを判定"""
@@ -45,12 +48,14 @@ class FailoverRouter:
             return False
         return True
 
-    def _mark_cooldown(self, model: str) -> None:
-        """モデルを cooldown_seconds 秒間スキップ対象にする"""
-        if self._cooldown_seconds <= 0:
+    def _mark_cooldown(self, model: str, duration: float | None = None) -> None:
+        """モデルを指定秒数間スキップ対象にする"""
+        if duration is None:
+            duration = self._cooldown_seconds
+        if duration <= 0:
             return
-        self._cooldown_until[model] = time.monotonic() + self._cooldown_seconds
-        logger.info(f"COOLDOWN {self._cooldown_seconds:.0f}s   {model}")
+        self._cooldown_until[model] = time.monotonic() + duration
+        logger.info(f"COOLDOWN {duration:.0f}s   {model}")
 
     def _filter_available(self, models: list[str]) -> list[str]:
         """クールダウン中のモデルを除外"""
@@ -89,6 +94,11 @@ class FailoverRouter:
             except RateLimitError as exc:
                 logger.warning(f"429 Rate limit   {model}")
                 self._mark_cooldown(model)
+                last_error = exc
+                continue
+            except NotFoundError as exc:
+                logger.warning(f"404 Not Found   {model}")
+                self._mark_cooldown(model, self._not_found_cooldown_seconds)
                 last_error = exc
                 continue
             except ProviderTimeoutError as exc:
@@ -132,6 +142,11 @@ class FailoverRouter:
             except RateLimitError as exc:
                 logger.warning(f"429 Rate limit   {model}")
                 self._mark_cooldown(model)
+                last_error = exc
+                continue
+            except NotFoundError as exc:
+                logger.warning(f"404 Not Found   {model}")
+                self._mark_cooldown(model, self._not_found_cooldown_seconds)
                 last_error = exc
                 continue
             except ProviderTimeoutError as exc:
