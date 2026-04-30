@@ -86,6 +86,10 @@ sequenceDiagram
             FR->>FR: Try next model
         else Timeout
             FR->>FR: Try next model
+        else 404 Not Found
+            OR-->>FR: 404
+            FR->>FR: Set COOLDOWN 600s
+            FR->>FR: Try next model
         end
     end
 
@@ -129,6 +133,7 @@ sequenceDiagram
 | **Model list** | Memory (`_cached_models`) | Free model list | 300 seconds |
 | **Tool support** | `tool_support_cache.json` | Per-model tool support flag | Persistent |
 | **Cooldown** | Class variable (`_cooldown_until`) | Rate-limited model state | In-process (reset on restart) |
+| **Ghost models** | Memory cache | 404-detected models | 600 seconds |
 | **Known vendors** | `known_vendors.json` | List of notified vendors | Persistent |
 
 ---
@@ -170,7 +175,8 @@ sequenceDiagram
     { "keywords": [ "next", "80b", "air" ], "priority": 1 },
     { "keywords": [ "nano", "mini", "lite", "flash" ], "priority": 98 }
   ],
-  "rate_limit_cooldown_seconds": 120
+  "rate_limit_cooldown_seconds": 120,
+  "not_found_cooldown_seconds": 600
 }
 ```
 
@@ -186,3 +192,4 @@ sequenceDiagram
 2. **Per request**: Try models in order, auto-skip on 429
 3. **Fallback**: Route to local Ollama when all cloud models fail
 4. **Cooldown**: Automatically skip rate-limited models for 120 seconds
+5. **Ghost model handling**: 404 errors trigger 600s cooldown to exclude removed models
