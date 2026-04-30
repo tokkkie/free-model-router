@@ -10,6 +10,10 @@ class ProviderTimeoutError(Exception):
     """タイムアウトエラー"""
 
 
+class NotFoundError(Exception):
+    """404 Not Found エラー"""
+
+
 class ProviderError(Exception):
     """その他のプロバイダーエラー"""
 

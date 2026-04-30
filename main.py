@@ -49,6 +49,7 @@ failover_router = FailoverRouter(
     local_model=config["ollama_model"],
     timeout=config["timeout_seconds"],
     cooldown_seconds=float(config.get("rate_limit_cooldown_seconds", 60)),
+    not_found_cooldown_seconds=float(config.get("not_found_cooldown_seconds", 600)),
 )
 
 tool_support_registry = ToolSupportRegistry(

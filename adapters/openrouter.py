@@ -4,7 +4,7 @@ from typing import AsyncGenerator
 
 import httpx
 
-from .base import AbstractLLMAdapter, ProviderError, ProviderTimeoutError, RateLimitError
+from .base import AbstractLLMAdapter, NotFoundError, ProviderError, ProviderTimeoutError, RateLimitError
 
 logger = logging.getLogger(__name__)
 
@@ -38,6 +38,8 @@ class OpenRouterAdapter(AbstractLLMAdapter):
 
         if resp.status_code == 429:
             raise RateLimitError(f"OpenRouter 429 ({model})")
+        if resp.status_code == 404:
+            raise NotFoundError(f"OpenRouter 404 ({model})")
         if not resp.is_success:
             raise ProviderError(f"OpenRouter {resp.status_code} ({model}): {resp.text[:200]}")
 
@@ -70,6 +72,9 @@ class OpenRouterAdapter(AbstractLLMAdapter):
             if resp.status_code == 429:
                 await resp.aclose()
                 raise RateLimitError(f"OpenRouter 429 ({model})")
+            if resp.status_code == 404:
+                await resp.aclose()
+                raise NotFoundError(f"OpenRouter 404 ({model})")
             if not resp.is_success:
                 err = await resp.aread()
                 raise ProviderError(f"OpenRouter {resp.status_code} ({model}): {err[:200]}")

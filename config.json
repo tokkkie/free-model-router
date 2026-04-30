@@ -8,6 +8,7 @@
   "verify_timeout_seconds": 15,
   "tool_support_cache_file": "tool_support_cache.json",
   "rate_limit_cooldown_seconds": 120,
+  "not_found_cooldown_seconds": 600,
   "exclude_keywords": [ "dolphin", "liquid", "arcee" ],
   "priority_keywords": [
     { "keywords": [ "next", "80b", "air" ], "priority": 1 },
