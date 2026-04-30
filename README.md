@@ -21,7 +21,8 @@ Run it locally and point your OpenAI-compatible client at it. That's it.
 - **OpenAI-compatible API** (`/v1/chat/completions`)
 - **Dynamic model discovery** — Automatically fetches `:free` models from OpenRouter (actually checks pricing and selects models with cost = 0)
 - **Priority routing** — Prefers capable models like `qwen`, `nemotron`, etc.
-- **Auto failover** — Switches to the next model on 429 or timeout
+- **Auto failover** — Switches to the next model on 429, 404, or timeout
+- **Ghost model detection** — Automatically excludes non-existent models (404) with 600s cooldown
 - **Local fallback** — Falls back to Ollama when all cloud models fail
 - **Streaming support** — Real-time responses via SSE
 - **Tool call verification** — Automatically tests function calling support on newly detected models and excludes incompatible ones
@@ -99,6 +100,7 @@ All settings are in `config.json`:
 | `verify_timeout_seconds` | Timeout for verification requests (seconds) |
 | `tool_support_cache_file` | File name for caching verification results |
 | `rate_limit_cooldown_seconds` | Seconds to skip a model after a 429 (default: `60`, set `0` to disable) |
+| `not_found_cooldown_seconds` | Seconds to skip a model after a 404 (default: `600`, ghost model detection) |
 
 ## Tool Call Verification
 
