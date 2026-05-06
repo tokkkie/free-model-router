@@ -3,6 +3,12 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
+# --debug オプションの処理
+if [[ "${1:-}" == "--debug" ]]; then
+  export LOG_LEVEL=DEBUG
+  shift
+fi
+
 # --- 仮想環境 ---
 if [ ! -d "${SCRIPT_DIR}/venv" ]; then
   echo "[setup] Creating virtual environment..."
