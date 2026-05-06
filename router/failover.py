@@ -1,3 +1,4 @@
+import json
 import logging
 import time
 from typing import AsyncIterator
@@ -191,6 +192,15 @@ class FailoverRouter:
                 except Exception as exc:
                     logger.error(f"FAIL local   {self._local_adapter.provider_name}")
 
-        raise ProviderError(
-            f"All providers failed. Last error: {last_error}"
-        )
+        # 全プロバイダー失敗時はSSEエラーメッセージを返す
+        error_msg = f"All providers failed. Last error: {last_error}"
+        logger.error(error_msg)
+        error_data = {
+            "error": {
+                "message": error_msg,
+                "type": "provider_error",
+                "code": "all_providers_failed"
+            }
+        }
+        yield f"data: {json.dumps(error_data)}\n\n".encode()
+        yield b"data: [DONE]\n\n"
