@@ -21,6 +21,21 @@ class GroqAdapter(AbstractLLMAdapter):
         self._base_url = base_url.rstrip("/")
         self._available_models: list[str] = []
 
+    @property
+    def provider_name(self) -> str:
+        return "groq"
+
+    @classmethod
+    def from_config(cls, config: dict, api_key: str | None):
+        """config から GroqAdapter を生成"""
+        if not api_key:
+            logger.warning("GROQ_API_KEY not set")
+            return None
+        return cls(
+            api_key=api_key,
+            base_url=config.get("base_url", "https://api.groq.com/openai/v1")
+        )
+
     def _headers(self) -> dict:
         return {
             "Authorization": f"Bearer {self._api_key}",

@@ -1,10 +1,13 @@
 import json
 import logging
-from typing import AsyncGenerator
+from typing import AsyncGenerator, TYPE_CHECKING
 
 import httpx
 
 from .base import AbstractLLMAdapter, NotFoundError, ProviderError, ProviderTimeoutError, RateLimitError
+
+if TYPE_CHECKING:
+    from router.model_router import ModelRouter
 
 logger = logging.getLogger(__name__)
 
@@ -12,9 +15,30 @@ logger = logging.getLogger(__name__)
 class OpenRouterAdapter(AbstractLLMAdapter):
     """OpenRouter API アダプター"""
 
-    def __init__(self, api_key: str, base_url: str = "https://openrouter.ai/api/v1") -> None:
+    def __init__(self, api_key: str, base_url: str, model_router) -> None:
         self._api_key = api_key
         self._base_url = base_url.rstrip("/")
+        self._model_router = model_router
+
+    @property
+    def provider_name(self) -> str:
+        return "openrouter"
+
+    async def list_models(self) -> list[str]:
+        """OpenRouter の無料モデルリストを取得"""
+        return await self._model_router.get_free_models()
+
+    @classmethod
+    def from_config(cls, config: dict, api_key: str | None, model_router):
+        """config から OpenRouterAdapter を生成"""
+        if not api_key:
+            logger.warning("OPENROUTER_API_KEY not set")
+            return None
+        return cls(
+            api_key=api_key,
+            base_url=config.get("base_url", "https://openrouter.ai/api/v1"),
+            model_router=model_router
+        )
 
     def _headers(self) -> dict:
         return {
