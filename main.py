@@ -9,6 +9,7 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import StreamingResponse
 
 from adapters import ProviderFactory
+from adapters.base import ProviderError
 from router.failover import FailoverRouter
 from router.model_router import ModelRouter
 from router.tool_support_registry import ToolSupportRegistry
@@ -172,7 +173,13 @@ async def chat_completions(request: Request):
     if not models_by_provider:
         raise HTTPException(status_code=503, detail="No providers available")
 
-    result = await failover_router.execute_with_failover(payload, models_by_provider, stream)
+    try:
+        result = await failover_router.execute_with_failover(payload, models_by_provider, stream)
+    except ProviderError as e:
+        raise HTTPException(
+            status_code=503,
+            detail=f"All providers failed: {str(e)}"
+        )
 
     if stream:
         return StreamingResponse(result, media_type="text/event-stream")
