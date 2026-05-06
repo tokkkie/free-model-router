@@ -32,12 +32,8 @@ class ProviderFactory:
             **kwargs: プロバイダー固有の追加引数（例: model_router）
 
         Returns:
-            生成されたアダプター、または None（無効化されている場合）
+            生成されたアダプター、または None（作成に失敗した場合）
         """
-        if not config.get("enabled", False):
-            logger.debug(f"Provider {name} is disabled")
-            return None
-
         adapter_class = cls._registry.get(name)
         if not adapter_class:
             logger.warning(f"Unknown provider: {name}")

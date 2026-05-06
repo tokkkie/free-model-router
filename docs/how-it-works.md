@@ -128,13 +128,13 @@ sequenceDiagram
 
 ## Cache Summary
 
-| Cache | Location | Content | TTL / Persistence |
-|-------|----------|---------|-------------------|
-| **Model list** | Memory (`_cached_models`) | Free model list | 300 seconds |
-| **Tool support** | `tool_support_cache.json` | Per-model tool support flag | Persistent |
-| **Cooldown** | Class variable (`_cooldown_until`) | Rate-limited model state | In-process (reset on restart) |
-| **Ghost models** | Memory cache | 404-detected models | 600 seconds |
-| **Known vendors** | `known_vendors.json` | List of notified vendors | Persistent |
+| Cache             | Location                           | Content                     | TTL / Persistence             |
+| ----------------- | ---------------------------------- | --------------------------- | ----------------------------- |
+| **Model list**    | Memory (`_cached_models`)          | Free model list             | 300 seconds                   |
+| **Tool support**  | `tool_support_cache.json`          | Per-model tool support flag | Persistent                    |
+| **Cooldown**      | Class variable (`_cooldown_until`) | Rate-limited model state    | In-process (reset on restart) |
+| **Ghost models**  | Memory cache                       | 404-detected models         | 600 seconds                   |
+| **Known vendors** | `known_vendors.json`               | List of notified vendors    | Persistent                    |
 
 ---
 
@@ -164,25 +164,48 @@ sequenceDiagram
 
 ---
 
-## Configuration (`config.json`)
+## Configuration (`config.yaml`)
 
-```json
-{
-  "timeout_seconds": 15,
-  "model_cache_ttl_seconds": 300,
-  "exclude_keywords": [ "dolphin", "liquid", "arcee" ],
-  "priority_keywords": [
-    { "keywords": [ "next", "80b", "air" ], "priority": 1 },
-    { "keywords": [ "nano", "mini", "lite", "flash" ], "priority": 98 }
-  ],
-  "rate_limit_cooldown_seconds": 120,
-  "not_found_cooldown_seconds": 600
-}
+```yaml
+global:
+  timeout_seconds: 15
+  model_cache_ttl_seconds: 300
+  rate_limit_cooldown_seconds: 120
+  not_found_cooldown_seconds: 600
+  verify_tool_support: true
+  cache_dir: .cache
+
+enabled_providers:
+  - openrouter
+  - groq
+  # - cerebras
+  - ollama
+
+providers:
+  openrouter:
+    base_url: https://openrouter.ai/api/v1
+    priority_keywords:
+      - keywords: [next, 80b, air]
+        priority: 1
+      - keywords: [nano, mini, lite, flash]
+        priority: 98
+    exclude_keywords: [dolphin, liquid, arcee]
+
+  groq:
+    base_url: https://api.groq.com/openai/v1
+    min_context_window: 120000
+    min_max_completion_tokens: 30000
+
+  ollama:
+    base_url: http://localhost:11434
+    model: phi3.5:latest
 ```
 
+- **`enabled_providers`**: List of active providers (comment out to disable)
 - **`exclude_keywords`**: Model name keywords to exclude from routing
 - **`priority_keywords`**: Priority rules — lower value = higher priority
 - **`rate_limit_cooldown_seconds`**: How long to skip a model after a 429
+- **`not_found_cooldown_seconds`**: How long to skip a model after a 404
 
 ---
 

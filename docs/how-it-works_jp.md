@@ -128,13 +128,13 @@ sequenceDiagram
 
 ## キャッシュ機構
 
-| キャッシュ　　　　　 | 場所　　　　　　　　　　　　　 | 内容　　　　　　　　 | TTL/永続性　　　　　　　　　　 |
-| ----------------------| --------------------------------| ----------------------| --------------------------------|
-| **モデルリスト**　　 | メモリ (`_cached_models`)　　　| Freeモデル一覧　　　 | 300秒　　　　　　　　　　　　　|
-| **ツール対応**　　　 | `tool_support_cache.json`　　　| モデルごとの対応有無 | 永続　　　　　　　　　　　　　 |
-| **クールダウン**　　 | クラス変数 (`_cooldown_until`) | 429モデルの休止状態　| プロセス内（再起動でリセット） |
-| **存在しないモデル** | メモリキャッシュ　　　　　　　 | 404検出モデル　　　　| 600秒　　　　　　　　　　　　　|
-| **既知ベンダー**　　 | `known_vendors.json`　　　　　 | 通知済みベンダー一覧 | 永続　　　　　　　　　　　　　 |
+| キャッシュ　　　　　 | 場所　　　　　　　　　　　　　  | 内容　　　　　　　　  | TTL/永続性　　　　　　　　　　  |
+| -------------------- | ------------------------------- | --------------------- | ------------------------------- |
+| **モデルリスト**　　 | メモリ (`_cached_models`)　　　 | Freeモデル一覧　　　  | 300秒　　　　　　　　　　　　　 |
+| **ツール対応**　　　 | `tool_support_cache.json`　　　 | モデルごとの対応有無  | 永続　　　　　　　　　　　　　  |
+| **クールダウン**　　 | クラス変数 (`_cooldown_until`)  | 429モデルの休止状態　 | プロセス内（再起動でリセット）  |
+| **存在しないモデル** | メモリキャッシュ　　　　　　　  | 404検出モデル　　　　 | 600秒　　　　　　　　　　　　　 |
+| **既知ベンダー**　　 | `known_vendors.json`　　　　　  | 通知済みベンダー一覧  | 永続　　　　　　　　　　　　　  |
 
 ---
 
@@ -164,27 +164,50 @@ sequenceDiagram
 
 ---
 
-## 設定ファイル (`config.json`)
+## 設定ファイル (`config.yaml`)
 
-```json
-{
-  "timeout_seconds": 15,
-  "model_cache_ttl_seconds": 300,
-  "exclude_keywords": [ "dolphin", "liquid", "arcee" ],
-  "priority_keywords": [
-    { "keywords": [ "next", "80b", "air" ], "priority": 1 },
-    { "keywords": [ "nano", "mini", "lite", "flash" ], "priority": 98 }
-  ],
-  "rate_limit_cooldown_seconds": 120,
-  "not_found_cooldown_seconds": 600
-}
+```yaml
+global:
+  timeout_seconds: 15
+  model_cache_ttl_seconds: 300
+  rate_limit_cooldown_seconds: 120
+  not_found_cooldown_seconds: 600
+  verify_tool_support: true
+  cache_dir: .cache
+
+enabled_providers:
+  - openrouter
+  - groq
+  # - cerebras
+  - ollama
+
+providers:
+  openrouter:
+    base_url: https://openrouter.ai/api/v1
+    priority_keywords:
+      - keywords: [next, 80b, air]
+        priority: 1
+      - keywords: [nano, mini, lite, flash]
+        priority: 98
+    exclude_keywords: [dolphin, liquid, arcee]
+
+  groq:
+    base_url: https://api.groq.com/openai/v1
+    min_context_window: 120000
+    min_max_completion_tokens: 30000
+
+  ollama:
+    base_url: http://localhost:11434
+    model: phi3.5:latest
 ```
 
 ### キー設定の説明
 
+- **`enabled_providers`**: 有効なプロバイダーのリスト（コメントアウトで無効化）
 - **`exclude_keywords`**: 除外するモデル名のキーワード
 - **`priority_keywords`**: 優先順位付けルール（priority値が小さいほど先頭）
 - **`rate_limit_cooldown_seconds`**: 429発生時の休止時間（秒）
+- **`not_found_cooldown_seconds`**: 404発生時の休止時間（秒）
 
 ---
 
