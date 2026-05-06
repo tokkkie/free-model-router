@@ -22,7 +22,7 @@ global:
   # ツールサポートの検証を有効化
   # true: 起動時に各モデルの tool calling サポート状況を確認
   # false: 検証をスキップ（起動が高速化）
-  verify_tool_support: true
+  verify_tool_support: false
 
   # ツールサポート検証のタイムアウト（秒）
   verify_timeout_seconds: 15
@@ -47,7 +47,7 @@ providers:
   # --------------------------------------------------------------------------
   openrouter:
     # プロバイダーの有効/無効
-    enabled: true
+    enabled: false
 
     # OpenRouter API のベースURL
     base_url: https://openrouter.ai/api/v1
@@ -76,7 +76,7 @@ providers:
   # --------------------------------------------------------------------------
   groq:
     # プロバイダーの有効/無効
-    enabled: true
+    enabled: false
 
     # Groq API のベースURL
     base_url: https://api.groq.com/openai/v1
@@ -93,25 +93,11 @@ providers:
     min_max_completion_tokens: 30000
 
   # --------------------------------------------------------------------------
-  # Ollama - ローカルLLM
-  # --------------------------------------------------------------------------
-  ollama:
-    # プロバイダーの有効/無効
-    enabled: true
-
-    # Ollama サーバーのベースURL
-    base_url: http://localhost:11434
-
-    # 使用するモデル名
-    # Ollama にインストール済みのモデル名を指定
-    model: phi3.5:latest
-
-  # --------------------------------------------------------------------------
   # Cerebras - 超高速推論プロバイダー
   # --------------------------------------------------------------------------
   cerebras:
     # プロバイダーの有効/無効
-    enabled: false
+    enabled: true
 
     # Cerebras API のベースURL
     base_url: https://api.cerebras.ai/v1
@@ -126,3 +112,17 @@ providers:
 
     # 注意: Cerebras はレートリミットが厳しいため、
     # 起動時のモデルリスト取得で複数のAPIコールが発生します
+
+  # --------------------------------------------------------------------------
+  # Ollama - ローカルLLM
+  # --------------------------------------------------------------------------
+  ollama:
+    # プロバイダーの有効/無効
+    enabled: true
+
+    # Ollama サーバーのベースURL
+    base_url: http://localhost:11434
+
+    # 使用するモデル名
+    # Ollama にインストール済みのモデル名を指定
+    model: phi3.5:latest

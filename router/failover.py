@@ -118,6 +118,7 @@ class FailoverRouter:
                     last_error = exc
                     continue
 
+        # ローカルフォールバック
         if self._local_adapter is not None:
             logger.warning("FALLBACK local")
             local_models = models_by_provider.get(self._local_adapter.provider_name, [])

@@ -125,6 +125,10 @@ class CerebrasAdapter(AbstractLLMAdapter):
         if resp.status_code == 429:
             raise RateLimitError(f"Cerebras 429 ({model})")
         
+        # モデル未検出エラー
+        if resp.status_code == 404:
+            raise NotFoundError(f"Cerebras 404 ({model})")
+        
         # その他のエラー
         if not resp.is_success:
             error_text = resp.text
@@ -163,6 +167,10 @@ class CerebrasAdapter(AbstractLLMAdapter):
             # レートリミットエラー
             if resp.status_code == 429:
                 raise RateLimitError(f"Cerebras 429 ({model})")
+            
+            # モデル未検出エラー
+            if resp.status_code == 404:
+                raise NotFoundError(f"Cerebras 404 ({model})")
 
             if not resp.is_success:
                 err = await resp.aread()
