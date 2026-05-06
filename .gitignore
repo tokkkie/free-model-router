@@ -12,3 +12,4 @@ build/
 *.log
 known_vendors.json
 tool_support_cache.json
+.cache/
