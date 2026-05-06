@@ -23,14 +23,14 @@ class FailoverRouter:
 
     def __init__(
         self,
-        cloud_adapter: AbstractLLMAdapter,
-        local_adapter: AbstractLLMAdapter,
+        cloud_adapters: list[AbstractLLMAdapter],
+        local_adapter: AbstractLLMAdapter | None,
         local_model: str,
         timeout: float,
         cooldown_seconds: float = 60.0,
         not_found_cooldown_seconds: float = 600.0,
     ) -> None:
-        self._cloud_adapter = cloud_adapter
+        self._cloud_adapters = cloud_adapters
         self._local_adapter = local_adapter
         self._local_model = local_model
         self._timeout = timeout
@@ -84,44 +84,84 @@ class FailoverRouter:
         last_error: Exception | None = None
         available_models = self._filter_available(models)
 
-        for model in available_models:
-            try:
-                result = await self._cloud_adapter.chat_completion(
-                    payload, model, self._timeout
-                )
-                logger.info(f"200 OK   {model}")
-                return result
-            except RateLimitError as exc:
-                logger.warning(f"429 Rate limit   {model}")
-                self._mark_cooldown(model)
-                last_error = exc
-                continue
-            except NotFoundError as exc:
-                logger.warning(f"404 Not Found   {model}")
-                self._mark_cooldown(model, self._not_found_cooldown_seconds)
-                last_error = exc
-                continue
-            except ProviderTimeoutError as exc:
-                logger.warning(f"TIMEOUT   {model}")
-                last_error = exc
-                continue
-            except ProviderError as exc:
-                logger.error(f"{exc.status_code if hasattr(exc, 'status_code') else 'ERROR'} {str(exc)[:50]}   {model}")
-                last_error = exc
-                continue
+        # models が空の場合は cloud_adapters に全てを委譲（アダプター内でモデル選択）
+        if not available_models and self._cloud_adapters:
+            for adapter in self._cloud_adapters:
+                try:
+                    result = await adapter.chat_completion(
+                        payload, "", self._timeout
+                    )
+                    logger.info(f"200 OK   (cloud adapter)")
+                    return result
+                except RateLimitError as exc:
+                    logger.warning(f"429 Rate limit   (cloud adapter)")
+                    last_error = exc
+                    continue
+                except ProviderTimeoutError as exc:
+                    logger.warning(f"TIMEOUT   (cloud adapter)")
+                    last_error = exc
+                    continue
+                except ProviderError as exc:
+                    logger.error(f"{exc.status_code if hasattr(exc, 'status_code') else 'ERROR'} {str(exc)[:50]}   (cloud adapter)")
+                    last_error = exc
+                    continue
+            # cloud_adapters が全て失敗した場合、local にフォールバック
+            if self._local_adapter is not None:
+                logger.warning("FALLBACK local")
+                try:
+                    result = await self._local_adapter.chat_completion(
+                        payload, self._local_model, self._timeout
+                    )
+                    logger.info(f"200 OK (local)   {self._local_model}")
+                    return result
+                except Exception as exc:
+                    logger.error(f"FAIL local   {self._local_model}")
 
-        logger.warning("FALLBACK local")
-        try:
-            result = await self._local_adapter.chat_completion(
-                payload, self._local_model, self._timeout
-            )
-            logger.info(f"200 OK (local)   {self._local_model}")
-            return result
-        except Exception as exc:
-            logger.error(f"FAIL local   {self._local_model}")
             raise ProviderError(
                 f"All providers failed. Last error: {last_error}"
-            ) from last_error
+            )
+
+        for model in available_models:
+            for adapter in self._cloud_adapters:
+                try:
+                    result = await adapter.chat_completion(
+                        payload, model, self._timeout
+                    )
+                    logger.info(f"200 OK   {model}")
+                    return result
+                except RateLimitError as exc:
+                    logger.warning(f"429 Rate limit   {model}")
+                    self._mark_cooldown(model)
+                    last_error = exc
+                    continue
+                except NotFoundError as exc:
+                    logger.warning(f"404 Not Found   {model}")
+                    self._mark_cooldown(model, self._not_found_cooldown_seconds)
+                    last_error = exc
+                    continue
+                except ProviderTimeoutError as exc:
+                    logger.warning(f"TIMEOUT   {model}")
+                    last_error = exc
+                    continue
+                except ProviderError as exc:
+                    logger.error(f"{exc.status_code if hasattr(exc, 'status_code') else 'ERROR'} {str(exc)[:50]}   {model}")
+                    last_error = exc
+                    continue
+
+        if self._local_adapter is not None:
+            logger.warning("FALLBACK local")
+            try:
+                result = await self._local_adapter.chat_completion(
+                    payload, self._local_model, self._timeout
+                )
+                logger.info(f"200 OK (local)   {self._local_model}")
+                return result
+            except Exception as exc:
+                logger.error(f"FAIL local   {self._local_model}")
+        
+        raise ProviderError(
+            f"All providers failed. Last error: {last_error}"
+        )
 
     async def _execute_stream_with_failover(
         self, payload: dict, models: list[str]
@@ -130,44 +170,52 @@ class FailoverRouter:
         last_error: Exception | None = None
         available_models = self._filter_available(models)
 
+        # models が空の場合は cloud_adapters のデフォルトモデルを試行
+        if not available_models and self._cloud_adapters:
+            available_models = [""]  # ダミーモデル名でアダプターを試行
+
         for model in available_models:
+            for adapter in self._cloud_adapters:
+                try:
+                    stream_gen = adapter.chat_completion_stream(
+                        payload, model, self._timeout
+                    )
+                    async for chunk in stream_gen:
+                        yield chunk
+                    logger.info(f"200 OK (stream)   {model}")
+                    return
+                except RateLimitError as exc:
+                    logger.warning(f"429 Rate limit   {model}")
+                    self._mark_cooldown(model)
+                    last_error = exc
+                    continue
+                except NotFoundError as exc:
+                    logger.warning(f"404 Not Found   {model}")
+                    self._mark_cooldown(model, self._not_found_cooldown_seconds)
+                    last_error = exc
+                    continue
+                except ProviderTimeoutError as exc:
+                    logger.warning(f"TIMEOUT   {model}")
+                    last_error = exc
+                    continue
+                except ProviderError as exc:
+                    logger.error(f"{exc.status_code if hasattr(exc, 'status_code') else 'ERROR'} {str(exc)[:50]}   {model}")
+                    last_error = exc
+                    continue
+
+        if self._local_adapter is not None:
+            logger.warning("FALLBACK local")
             try:
-                stream_gen = self._cloud_adapter.chat_completion_stream(
-                    payload, model, self._timeout
+                stream_gen = self._local_adapter.chat_completion_stream(
+                    payload, self._local_model, self._timeout
                 )
                 async for chunk in stream_gen:
                     yield chunk
-                logger.info(f"200 OK (stream)   {model}")
+                logger.info(f"200 OK (stream local)   {self._local_model}")
                 return
-            except RateLimitError as exc:
-                logger.warning(f"429 Rate limit   {model}")
-                self._mark_cooldown(model)
-                last_error = exc
-                continue
-            except NotFoundError as exc:
-                logger.warning(f"404 Not Found   {model}")
-                self._mark_cooldown(model, self._not_found_cooldown_seconds)
-                last_error = exc
-                continue
-            except ProviderTimeoutError as exc:
-                logger.warning(f"TIMEOUT   {model}")
-                last_error = exc
-                continue
-            except ProviderError as exc:
-                logger.error(f"{exc.status_code if hasattr(exc, 'status_code') else 'ERROR'} {str(exc)[:50]}   {model}")
-                last_error = exc
-                continue
+            except Exception as exc:
+                logger.error(f"FAIL local   {self._local_model}")
 
-        logger.warning("FALLBACK local")
-        try:
-            stream_gen = self._local_adapter.chat_completion_stream(
-                payload, self._local_model, self._timeout
-            )
-            async for chunk in stream_gen:
-                yield chunk
-            logger.info(f"200 OK (stream local)   {self._local_model}")
-        except Exception as exc:
-            logger.error(f"FAIL local   {self._local_model}")
-            raise ProviderError(
-                f"All providers failed. Last error: {last_error}"
-            ) from last_error
+        raise ProviderError(
+            f"All providers failed. Last error: {last_error}"
+        )

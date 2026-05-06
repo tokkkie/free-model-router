@@ -17,6 +17,15 @@ class OllamaAdapter(AbstractLLMAdapter):
     def _headers(self) -> dict:
         return {"Content-Type": "application/json"}
 
+    async def is_available(self) -> bool:
+        """Ollama が起動しているか確認"""
+        try:
+            async with httpx.AsyncClient(timeout=3.0) as client:
+                resp = await client.get(f"{self._base_url}/api/tags")
+                return resp.is_success
+        except Exception:
+            return False
+
     async def chat_completion(self, payload: dict, model: str, timeout: float) -> dict:
         body = {**payload, "model": model, "stream": False}
         try:

@@ -9,12 +9,15 @@
   "tool_support_cache_file": "tool_support_cache.json",
   "rate_limit_cooldown_seconds": 120,
   "not_found_cooldown_seconds": 600,
-  "exclude_keywords": [ "dolphin", "liquid", "arcee" ],
+  "providers": {
+    "groq": { "enabled": true, "base_url": "https://api.groq.com/openai/v1" }
+  },
+  "exclude_keywords": ["dolphin", "liquid", "arcee"],
   "priority_keywords": [
-    { "keywords": [ "next", "80b", "air" ], "priority": 1 },
-    { "keywords": [ "super", "480b", "405b" ], "priority": 2 },
-    { "keywords": [ "120b", "100b", "70b" ], "priority": 3 },
-    { "keywords": [ "31b", "26b", "32b", "33b", "34b" ], "priority": 4 },
-    { "keywords": [ "nano", "mini", "lite", "flash" ], "priority": 98 }
+    { "keywords": ["next", "80b", "air"], "priority": 1 },
+    { "keywords": ["super", "480b", "405b"], "priority": 2 },
+    { "keywords": ["120b", "100b", "70b"], "priority": 3 },
+    { "keywords": ["31b", "26b", "32b", "33b", "34b"], "priority": 4 },
+    { "keywords": ["nano", "mini", "lite", "flash"], "priority": 98 }
   ]
 }
