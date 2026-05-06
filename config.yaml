@@ -118,7 +118,7 @@ providers:
   # --------------------------------------------------------------------------
   ollama:
     # プロバイダーの有効/無効
-    enabled: true
+    enabled: false
 
     # Ollama サーバーのベースURL
     base_url: http://localhost:11434
