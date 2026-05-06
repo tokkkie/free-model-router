@@ -5,6 +5,7 @@ from .base import AbstractLLMAdapter
 from .openrouter import OpenRouterAdapter
 from .groq import GroqAdapter
 from .ollama import OllamaAdapter
+from .cerebras import CerebrasAdapter
 
 logger = logging.getLogger(__name__)
 
@@ -55,4 +56,5 @@ class ProviderFactory:
 # プロバイダーを自動登録
 ProviderFactory.register("openrouter", OpenRouterAdapter)
 ProviderFactory.register("groq", GroqAdapter)
+ProviderFactory.register("cerebras", CerebrasAdapter)
 ProviderFactory.register("ollama", OllamaAdapter)

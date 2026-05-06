@@ -9,6 +9,7 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import StreamingResponse
 
 from adapters import ProviderFactory
+from adapters.base import ProviderError
 from router.failover import FailoverRouter
 from router.model_router import ModelRouter
 from router.tool_support_registry import ToolSupportRegistry
@@ -171,8 +172,27 @@ async def chat_completions(request: Request):
 
     if not models_by_provider:
         raise HTTPException(status_code=503, detail="No providers available")
+    
+    # 利用可能なモデルがあるかチェック（クールダウン中を除く）
+    available_models = []
+    for provider_name, models in models_by_provider.items():
+        for model in models:
+            if not failover_router._is_cooling_down(model):
+                available_models.append(f"{provider_name}:{model}")
+    
+    if not available_models:
+        raise HTTPException(
+            status_code=503,
+            detail="All models are currently on cooldown. Please try again later."
+        )
 
-    result = await failover_router.execute_with_failover(payload, models_by_provider, stream)
+    try:
+        result = await failover_router.execute_with_failover(payload, models_by_provider, stream)
+    except ProviderError as e:
+        raise HTTPException(
+            status_code=503,
+            detail=f"All providers failed: {str(e)}"
+        )
 
     if stream:
         return StreamingResponse(result, media_type="text/event-stream")

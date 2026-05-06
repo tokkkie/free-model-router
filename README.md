@@ -19,7 +19,9 @@ Run it locally and point your OpenAI-compatible client at it. That's it.
 ## Features
 
 - **OpenAI-compatible API** (`/v1/chat/completions`)
-- **Dynamic model discovery** — Automatically fetches `:free` models from OpenRouter (actually checks pricing and selects models with cost = 0)
+- **Multi-provider support** — OpenRouter, Groq, Cerebras, and local Ollama
+- **Dynamic model discovery** — Automatically fetches available models from each provider
+- **Provider factory pattern** — Easy to add new providers (just 1 file + 1 line registration)
 - **Priority routing** — Prefers capable models like `qwen`, `nemotron`, etc.
 - **Auto failover** — Switches to the next model on 429, 404, or timeout
 - **Ghost model detection** — Automatically excludes non-existent models (404) with 600s cooldown
@@ -40,8 +42,10 @@ free-model-router/
 ├── adapters/
 │   ├── __init__.py
 │   ├── base.py               # Abstract adapter base
+│   ├── provider_factory.py   # Provider factory for dynamic registration
 │   ├── openrouter.py         # OpenRouter adapter
 │   ├── groq.py               # Groq adapter
+│   ├── cerebras.py           # Cerebras adapter
 │   └── ollama.py             # Ollama local adapter
 │
 ├── router/
@@ -59,12 +63,17 @@ free-model-router/
 
 ## Setup
 
-### 1. Configure API Key
+### 1. Configure API Keys
 
 ```bash
 cp .env.example .env
-# Edit .env and set your OPENROUTER_API_KEY
+# Edit .env and set your API keys:
+# - OPENROUTER_API_KEY (required if OpenRouter is enabled)
+# - GROQ_API_KEY (required if Groq is enabled)
+# - CEREBRAS_API_KEY (required if Cerebras is enabled)
 ```
+
+Edit `config.yaml` to enable/disable providers and configure settings.
 
 ### 2. Start the server
 
