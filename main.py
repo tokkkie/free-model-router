@@ -28,18 +28,24 @@ with open("config.yaml", encoding="utf-8") as f:
 
 # グローバル設定とプロバイダー設定を取得
 global_config = config.get("global", {})
+enabled_providers = config.get("enabled_providers", [])
 providers_config = config.get("providers", {})
 
-# プロバイダーを config.yaml の順序で初期化
+# プロバイダーを enabled_providers の順序で初期化
 cloud_adapters = []
 local_adapter = None
 
-for provider_name, provider_config in providers_config.items():
+for provider_name in enabled_providers:
+    provider_config = providers_config.get(provider_name)
+    if not provider_config:
+        logger.warning(f"Provider {provider_name} is enabled but not configured")
+        continue
+    
     api_key = os.getenv(f"{provider_name.upper()}_API_KEY")
     
     # OpenRouter は ModelRouter が必要
     kwargs = {}
-    if provider_name == "openrouter" and provider_config.get("enabled"):
+    if provider_name == "openrouter":
         model_router = ModelRouter(
             openrouter_base_url=provider_config["base_url"],
             priority_keywords=provider_config.get("priority_keywords", []),
