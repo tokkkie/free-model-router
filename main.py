@@ -35,6 +35,8 @@ providers_config = config.get("providers", {})
 cloud_adapters = []
 local_adapter = None
 
+logger.info(f"Enabled providers: {enabled_providers}")
+
 for provider_name in enabled_providers:
     provider_config = providers_config.get(provider_name)
     if not provider_config:
@@ -42,6 +44,7 @@ for provider_name in enabled_providers:
         continue
     
     api_key = os.getenv(f"{provider_name.upper()}_API_KEY")
+    logger.info(f"Initializing {provider_name} (API key: {'set' if api_key else 'not set'})")
     
     # OpenRouter は ModelRouter が必要
     kwargs = {}
@@ -56,7 +59,10 @@ for provider_name in enabled_providers:
     
     adapter = ProviderFactory.create(provider_name, provider_config, api_key, **kwargs)
     if adapter is None:
+        logger.warning(f"Failed to create adapter for {provider_name}")
         continue
+    
+    logger.info(f"Successfully created adapter for {provider_name}")
     
     # ローカルプロバイダーの判定
     if provider_name == "ollama":
