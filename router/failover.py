@@ -25,14 +25,12 @@ class FailoverRouter:
         self,
         cloud_adapters: list[AbstractLLMAdapter],
         local_adapter: AbstractLLMAdapter | None,
-        local_model: str,
         timeout: float,
         cooldown_seconds: float = 60.0,
         not_found_cooldown_seconds: float = 600.0,
     ) -> None:
         self._cloud_adapters = cloud_adapters
         self._local_adapter = local_adapter
-        self._local_model = local_model
         self._timeout = timeout
         self._cooldown_seconds = cooldown_seconds
         self._not_found_cooldown_seconds = not_found_cooldown_seconds
@@ -68,61 +66,33 @@ class FailoverRouter:
     async def execute_with_failover(
         self,
         payload: dict,
-        models: list[str],
+        models_by_provider: dict[str, list[str]],
         stream: bool,
     ) -> dict | AsyncIterator[bytes]:
-        """モデルリストを順に試行し、成功するまでリトライ"""
+        """フェイルオーバー付きでリクエストを実行
+        
+        Args:
+            payload: リクエストペイロード
+            models_by_provider: プロバイダー名をキーとしたモデルリストの辞書
+            stream: ストリーミングモードかどうか
+        """
         if stream:
-            return self._execute_stream_with_failover(payload, models)
+            return self._execute_stream_with_failover(payload, models_by_provider)
         else:
-            return await self._execute_non_stream_with_failover(payload, models)
+            return await self._execute_non_stream_with_failover(payload, models_by_provider)
 
     async def _execute_non_stream_with_failover(
-        self, payload: dict, models: list[str]
+        self, payload: dict, models_by_provider: dict[str, list[str]]
     ) -> dict:
         """非ストリーミングリクエストのFailover処理"""
         last_error: Exception | None = None
-        available_models = self._filter_available(models)
 
-        # models が空の場合は cloud_adapters に全てを委譲（アダプター内でモデル選択）
-        if not available_models and self._cloud_adapters:
-            for adapter in self._cloud_adapters:
-                try:
-                    result = await adapter.chat_completion(
-                        payload, "", self._timeout
-                    )
-                    logger.info(f"200 OK   (cloud adapter)")
-                    return result
-                except RateLimitError as exc:
-                    logger.warning(f"429 Rate limit   (cloud adapter)")
-                    last_error = exc
-                    continue
-                except ProviderTimeoutError as exc:
-                    logger.warning(f"TIMEOUT   (cloud adapter)")
-                    last_error = exc
-                    continue
-                except ProviderError as exc:
-                    logger.error(f"{exc.status_code if hasattr(exc, 'status_code') else 'ERROR'} {str(exc)[:50]}   (cloud adapter)")
-                    last_error = exc
-                    continue
-            # cloud_adapters が全て失敗した場合、local にフォールバック
-            if self._local_adapter is not None:
-                logger.warning("FALLBACK local")
-                try:
-                    result = await self._local_adapter.chat_completion(
-                        payload, self._local_model, self._timeout
-                    )
-                    logger.info(f"200 OK (local)   {self._local_model}")
-                    return result
-                except Exception as exc:
-                    logger.error(f"FAIL local   {self._local_model}")
+        # 各クラウドアダプターを順に試行
+        for adapter in self._cloud_adapters:
+            models = models_by_provider.get(adapter.provider_name, [])
+            available_models = self._filter_available(models)
 
-            raise ProviderError(
-                f"All providers failed. Last error: {last_error}"
-            )
-
-        for model in available_models:
-            for adapter in self._cloud_adapters:
+            for model in available_models:
                 try:
                     result = await adapter.chat_completion(
                         payload, model, self._timeout
@@ -144,38 +114,39 @@ class FailoverRouter:
                     last_error = exc
                     continue
                 except ProviderError as exc:
-                    logger.error(f"{exc.status_code if hasattr(exc, 'status_code') else 'ERROR'} {str(exc)[:50]}   {model}")
+                    logger.error(f"ERROR {str(exc)[:50]}   {model}")
                     last_error = exc
                     continue
 
         if self._local_adapter is not None:
             logger.warning("FALLBACK local")
-            try:
-                result = await self._local_adapter.chat_completion(
-                    payload, self._local_model, self._timeout
-                )
-                logger.info(f"200 OK (local)   {self._local_model}")
-                return result
-            except Exception as exc:
-                logger.error(f"FAIL local   {self._local_model}")
+            local_models = models_by_provider.get(self._local_adapter.provider_name, [])
+            if local_models:
+                try:
+                    result = await self._local_adapter.chat_completion(
+                        payload, local_models[0], self._timeout
+                    )
+                    logger.info(f"200 OK (local)   {local_models[0]}")
+                    return result
+                except Exception as exc:
+                    logger.error(f"FAIL local   {self._local_adapter.provider_name}")
         
         raise ProviderError(
             f"All providers failed. Last error: {last_error}"
         )
 
     async def _execute_stream_with_failover(
-        self, payload: dict, models: list[str]
+        self, payload: dict, models_by_provider: dict[str, list[str]]
     ) -> AsyncIterator[bytes]:
         """ストリーミングリクエストのFailover処理"""
         last_error: Exception | None = None
-        available_models = self._filter_available(models)
 
-        # models が空の場合は cloud_adapters のデフォルトモデルを試行
-        if not available_models and self._cloud_adapters:
-            available_models = [""]  # ダミーモデル名でアダプターを試行
+        # 各クラウドアダプターを順に試行
+        for adapter in self._cloud_adapters:
+            models = models_by_provider.get(adapter.provider_name, [])
+            available_models = self._filter_available(models)
 
-        for model in available_models:
-            for adapter in self._cloud_adapters:
+            for model in available_models:
                 try:
                     stream_gen = adapter.chat_completion_stream(
                         payload, model, self._timeout
@@ -199,22 +170,25 @@ class FailoverRouter:
                     last_error = exc
                     continue
                 except ProviderError as exc:
-                    logger.error(f"{exc.status_code if hasattr(exc, 'status_code') else 'ERROR'} {str(exc)[:50]}   {model}")
+                    logger.error(f"ERROR {str(exc)[:50]}   {model}")
                     last_error = exc
                     continue
 
+        # ローカルフォールバック
         if self._local_adapter is not None:
             logger.warning("FALLBACK local")
-            try:
-                stream_gen = self._local_adapter.chat_completion_stream(
-                    payload, self._local_model, self._timeout
-                )
-                async for chunk in stream_gen:
-                    yield chunk
-                logger.info(f"200 OK (stream local)   {self._local_model}")
-                return
-            except Exception as exc:
-                logger.error(f"FAIL local   {self._local_model}")
+            local_models = models_by_provider.get(self._local_adapter.provider_name, [])
+            if local_models:
+                try:
+                    stream_gen = self._local_adapter.chat_completion_stream(
+                        payload, local_models[0], self._timeout
+                    )
+                    async for chunk in stream_gen:
+                        yield chunk
+                    logger.info(f"200 OK (stream local)   {local_models[0]}")
+                    return
+                except Exception as exc:
+                    logger.error(f"FAIL local   {self._local_adapter.provider_name}")
 
         raise ProviderError(
             f"All providers failed. Last error: {last_error}"

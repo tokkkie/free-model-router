@@ -11,8 +11,25 @@ logger = logging.getLogger(__name__)
 class OllamaAdapter(AbstractLLMAdapter):
     """Ollama ローカルインスタンス用アダプター（OpenAI 互換エンドポイント使用）"""
 
-    def __init__(self, base_url: str = "http://localhost:11434") -> None:
+    def __init__(self, base_url: str, model: str) -> None:
         self._base_url = base_url.rstrip("/")
+        self._model = model
+
+    @property
+    def provider_name(self) -> str:
+        return "ollama"
+
+    async def list_models(self) -> list[str]:
+        """Ollama は単一モデルのみ"""
+        return [self._model]
+
+    @classmethod
+    def from_config(cls, config: dict, api_key: str | None):
+        """config から OllamaAdapter を生成"""
+        return cls(
+            base_url=config.get("base_url", "http://localhost:11434"),
+            model=config.get("model", "phi3.5:latest")
+        )
 
     def _headers(self) -> dict:
         return {"Content-Type": "application/json"}

@@ -8,9 +8,7 @@ from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import StreamingResponse
 
-from adapters.groq import GroqAdapter
-from adapters.ollama import OllamaAdapter
-from adapters.openrouter import OpenRouterAdapter
+from adapters import ProviderFactory
 from router.failover import FailoverRouter
 from router.model_router import ModelRouter
 from router.tool_support_registry import ToolSupportRegistry
@@ -31,51 +29,33 @@ with open("config.yaml", encoding="utf-8") as f:
 global_config = config.get("global", {})
 providers_config = config.get("providers", {})
 
-# プロバイダーの初期化（後で lifespan で使用）
-model_router = None
-openrouter_adapter = None
-groq_adapter = None
-ollama_adapter = None
+# プロバイダーを config.yaml の順序で初期化
 cloud_adapters = []
+local_adapter = None
 
-# OpenRouter の初期化
-openrouter_config = providers_config.get("openrouter", {})
-if openrouter_config.get("enabled", False):
-    openrouter_api_key = os.getenv("OPENROUTER_API_KEY")
-    if openrouter_api_key:
+for provider_name, provider_config in providers_config.items():
+    api_key = os.getenv(f"{provider_name.upper()}_API_KEY")
+    
+    # OpenRouter は ModelRouter が必要
+    kwargs = {}
+    if provider_name == "openrouter" and provider_config.get("enabled"):
         model_router = ModelRouter(
-            openrouter_base_url=openrouter_config["base_url"],
-            priority_keywords=openrouter_config.get("priority_keywords", []),
-            exclude_keywords=openrouter_config.get("exclude_keywords", []),
+            openrouter_base_url=provider_config["base_url"],
+            priority_keywords=provider_config.get("priority_keywords", []),
+            exclude_keywords=provider_config.get("exclude_keywords", []),
             cache_ttl=global_config.get("model_cache_ttl_seconds", 300),
         )
-        openrouter_adapter = OpenRouterAdapter(
-            api_key=openrouter_api_key,
-            base_url=openrouter_config["base_url"],
-        )
-        cloud_adapters.append(openrouter_adapter)
-        logger.info("OpenRouter provider enabled")
+        kwargs["model_router"] = model_router
+    
+    adapter = ProviderFactory.create(provider_name, provider_config, api_key, **kwargs)
+    if adapter is None:
+        continue
+    
+    # ローカルプロバイダーの判定
+    if provider_name == "ollama":
+        local_adapter = adapter
     else:
-        logger.warning("OpenRouter enabled in config but OPENROUTER_API_KEY not set")
-
-# Groq の初期化
-groq_config = providers_config.get("groq", {})
-if groq_config.get("enabled", False):
-    groq_api_key = os.getenv("GROQ_API_KEY")
-    if groq_api_key:
-        groq_adapter = GroqAdapter(
-            api_key=groq_api_key,
-            base_url=groq_config.get("base_url", "https://api.groq.com/openai/v1")
-        )
-        cloud_adapters.append(groq_adapter)
-        logger.info("Groq provider enabled")
-    else:
-        logger.warning("Groq enabled in config but GROQ_API_KEY not set")
-
-# Ollama の初期化
-ollama_config = providers_config.get("ollama", {})
-if ollama_config.get("enabled", False):
-    ollama_adapter = OllamaAdapter(base_url=ollama_config["base_url"])
+        cloud_adapters.append(adapter)
 
 # FailoverRouter は起動時に local_adapter を設定するため、グローバル変数として保持
 failover_router = None
@@ -91,44 +71,46 @@ tool_support_registry = ToolSupportRegistry(
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global failover_router
+    global failover_router, local_adapter
 
     # Ollama の起動確認
-    local_adapter = None
-    local_model = None
-    if ollama_adapter is not None:
-        local_model = ollama_config.get("model", "phi3.5:latest")
-        if await ollama_adapter.is_available():
-            local_adapter = ollama_adapter
-            logger.info(f"Ollama available at {ollama_config['base_url']}")
+    if local_adapter is not None:
+        if await local_adapter.is_available():
+            logger.info(f"Ollama available")
         else:
-            logger.warning(f"Ollama not available at {ollama_config['base_url']}, skipping local fallback")
+            logger.warning(f"Ollama not available, skipping local fallback")
+            local_adapter = None
 
     # FailoverRouter を初期化
     failover_router = FailoverRouter(
         cloud_adapters=cloud_adapters,
         local_adapter=local_adapter,
-        local_model=local_model,
         timeout=global_config.get("timeout_seconds", 15),
         cooldown_seconds=float(global_config.get("rate_limit_cooldown_seconds", 60)),
         not_found_cooldown_seconds=float(global_config.get("not_found_cooldown_seconds", 600)),
     )
 
-    models = []
-    if model_router is not None:
-        logger.info("Fetching free models from OpenRouter...")
-        models = await model_router.get_free_models()
-        logger.info(f"Found {len(models)} free models")
+    # 各プロバイダーのモデルリストを取得
+    models_by_provider = {}
+    for adapter in cloud_adapters:
+        models = await adapter.list_models()
+        models_by_provider[adapter.provider_name] = models
+        logger.info(f"{adapter.provider_name}: {len(models)} models")
 
-    if groq_adapter is not None:
-        await groq_adapter.list_models()
+    if local_adapter:
+        models = await local_adapter.list_models()
+        models_by_provider[local_adapter.provider_name] = models
 
-    pruned = tool_support_registry.prune(models) if models else 0
+    # ツールサポート検証（OpenRouter のみ）
+    openrouter_models = models_by_provider.get("openrouter", [])
+    pruned = tool_support_registry.prune(openrouter_models) if openrouter_models else 0
     if pruned:
         logger.info(f"Pruned {pruned} stale models from tool support cache")
 
-    if global_config.get("verify_tool_support", True) and openrouter_adapter and models:
-        unverified = tool_support_registry.get_unverified(models)
+    # OpenRouter アダプターを取得
+    openrouter_adapter = next((a for a in cloud_adapters if a.provider_name == "openrouter"), None)
+    if global_config.get("verify_tool_support", True) and openrouter_adapter and openrouter_models:
+        unverified = tool_support_registry.get_unverified(openrouter_models)
         if unverified:
             logger.info(
                 f"{len(unverified)} new models detected, verifying tool support..."
@@ -174,15 +156,23 @@ async def chat_completions(request: Request):
     # クライアントからの model パラメータを削除（サーバー側で自動選択）
     payload.pop("model", None)
 
-    models = []
-    if model_router is not None:
-        models = await model_router.get_free_models()
-        models = tool_support_registry.filter_supported(models)
+    # 各プロバイダーのモデルリストを取得
+    models_by_provider = {}
+    for adapter in cloud_adapters:
+        models = await adapter.list_models()
+        # OpenRouter のみツールサポートフィルタを適用
+        if adapter.provider_name == "openrouter":
+            models = tool_support_registry.filter_supported(models)
+        models_by_provider[adapter.provider_name] = models
 
-    if not models and not cloud_adapters:
+    if local_adapter:
+        models = await local_adapter.list_models()
+        models_by_provider[local_adapter.provider_name] = models
+
+    if not models_by_provider:
         raise HTTPException(status_code=503, detail="No providers available")
 
-    result = await failover_router.execute_with_failover(payload, models, stream)
+    result = await failover_router.execute_with_failover(payload, models_by_provider, stream)
 
     if stream:
         return StreamingResponse(result, media_type="text/event-stream")

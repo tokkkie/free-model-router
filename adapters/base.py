@@ -22,8 +22,23 @@ class AbstractLLMAdapter(ABC):
     """LLM プロバイダーアダプターの基底クラス
     
     新しいプロバイダーを追加する場合はこのクラスを継承し、
-    chat_completion と chat_completion_stream を実装すること。
+    provider_name, list_models, chat_completion, chat_completion_stream を実装すること。
     """
+
+    @property
+    @abstractmethod
+    def provider_name(self) -> str:
+        """プロバイダー名を返す（例: "openrouter", "groq", "ollama"）"""
+        pass
+
+    @abstractmethod
+    async def list_models(self) -> list[str]:
+        """このプロバイダーの利用可能モデルリストを返す
+        
+        Returns:
+            モデル ID のリスト（このプロバイダーで使用可能なもののみ）
+        """
+        pass
 
     @abstractmethod
     async def chat_completion(
