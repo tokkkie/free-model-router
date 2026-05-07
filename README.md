@@ -19,7 +19,7 @@ Run it locally and point your OpenAI-compatible client at it. That's it.
 ## Features
 
 - **OpenAI-compatible API** (`/v1/chat/completions`)
-- **Multi-provider support** — OpenRouter, Groq, Cerebras, and local Ollama
+- **Multi-provider support** — OpenRouter, Groq, Cerebras, SambaNova, and local Ollama
 - **Dynamic model discovery** — Automatically fetches available models from each provider
 - **Provider factory pattern** — Easy to add new providers (just 1 file + 1 line registration)
 - **Priority routing** — Prefers capable models like `qwen`, `nemotron`, etc.
@@ -46,6 +46,7 @@ free-model-router/
 │   ├── openrouter.py         # OpenRouter adapter
 │   ├── groq.py               # Groq adapter
 │   ├── cerebras.py           # Cerebras adapter
+│   ├── sambanova.py          # SambaNova adapter
 │   └── ollama.py             # Ollama local adapter
 │
 ├── router/
@@ -71,6 +72,7 @@ cp .env.example .env
 # - OPENROUTER_API_KEY (required if OpenRouter is enabled)
 # - GROQ_API_KEY (required if Groq is enabled)
 # - CEREBRAS_API_KEY (required if Cerebras is enabled)
+# - SAMBANOVA_API_KEY (required if SambaNova is enabled)
 ```
 
 Edit `config.yaml` to enable/disable providers and configure settings.

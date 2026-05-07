@@ -19,7 +19,7 @@ OpenRouterの無料モデルを自動で順番に試し、
 ## 特徴
 
 - **OpenAI 互換 API** (`/v1/chat/completions`)
-- **マルチプロバイダー対応** — OpenRouter, Groq, Cerebras, ローカル Ollama
+- **マルチプロバイダー対応** — OpenRouter, Groq, Cerebras, SambaNova, ローカル Ollama
 - **動的モデル検出** — 各プロバイダーから利用可能なモデルを自動取得
 - **プロバイダーファクトリーパターン** — 新規プロバイダーの追加が容易（1ファイル + 1行の登録のみ）
 - **優先順位ルーティング** — `qwen`, `nemotron` 等の高性能モデルを優先
@@ -46,6 +46,7 @@ free-model-router/
 │   ├── openrouter.py         # OpenRouter アダプター
 │   ├── groq.py               # Groq アダプター
 │   ├── cerebras.py           # Cerebras アダプター
+│   ├── sambanova.py          # SambaNova アダプター
 │   └── ollama.py             # Ollama ローカルアダプター
 │
 ├── router/
@@ -71,6 +72,7 @@ cp .env.example .env
 # - OPENROUTER_API_KEY (OpenRouter を有効化する場合は必須)
 # - GROQ_API_KEY (Groq を有効化する場合は必須)
 # - CEREBRAS_API_KEY (Cerebras を有効化する場合は必須)
+# - SAMBANOVA_API_KEY (SambaNova を有効化する場合は必須)
 ```
 
 `config.yaml` でプロバイダーの有効/無効を設定できます。
