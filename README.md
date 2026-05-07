@@ -8,7 +8,7 @@ Free LLMs are great — until they aren't.
 
 Annoying. So let's just automate that.
 
-Free Model Router cycles through OpenRouter's free models automatically.
+Free Model Router cycles through multiple providers' free models automatically.
 When one fails (429 or timeout), it moves on to the next without you doing anything.
 No more manual model switching. No more babysitting rate limits.
 
