@@ -16,24 +16,25 @@ OpenRouterの無料モデルを自動で順番に試し、
 
 ローカルで起動し、OpenAI互換APIの接続先をこれに向けるだけで使えます。
 
-
 ## 特徴
 
 - **OpenAI 互換 API** (`/v1/chat/completions`)
-- **動的モデルリスト取得** — OpenRouter の `:free` モデルを自動取得(実際はpriceをチェックして0のもの)
-- **優先順位ルーティング** — `qwen`, `nemotron` 等を優先
-- **自動リトライ (Failover)** — 429 / 404 / タイムアウト時に次モデルへ切替
+- **マルチプロバイダー対応** — OpenRouter, Groq, Cerebras, ローカル Ollama
+- **動的モデル検出** — 各プロバイダーから利用可能なモデルを自動取得
+- **プロバイダーファクトリーパターン** — 新規プロバイダーの追加が容易（1ファイル + 1行の登録のみ）
+- **優先順位ルーティング** — `qwen`, `nemotron` 等の高性能モデルを優先
+- **自動フォールオーバー** — 429 / 404 / タイムアウト時に次モデルへ切替
 - **存在しないモデル検出** — 存在しないモデル（404）を600秒クールダウンで自動除外
-- **ローカル最終防衛線** — 全クラウドモデル失敗時は Ollama へフォールバック
+- **ローカルフォールバック** — 全クラウドモデル失敗時は Ollama へフォールバック
 - **ストリーミング対応** — SSE 形式でリアルタイム応答
 - **ツール呼び出し自動検証** — 新規モデル検出時に function calling の可否を自動テストし、非対応モデルを自動除外
 
 ## ディレクトリ構造
 
 ```
-openrouter-routing/
+free-model-router/
 ├── main.py                   # FastAPI サーバー本体
-├── config.json               # タイムアウト・優先度設定
+├── config.yaml               # プロバイダー設定・タイムアウト・優先度設定
 ├── setup.sh                  # venv 作成・依存インストール・起動
 ├── requirements.txt          # Python 依存パッケージ
 ├── known_vendors.json        # 既知ベンダーリスト（自動更新）
@@ -41,8 +42,11 @@ openrouter-routing/
 ├── adapters/
 │   ├── __init__.py
 │   ├── base.py               # 抽象アダプター
-│   ├── openrouter.py         # OpenRouter 呼び出し
-│   └── ollama.py             # Ollama ローカル呼び出し
+│   ├── provider_factory.py   # プロバイダーファクトリー（動的登録）
+│   ├── openrouter.py         # OpenRouter アダプター
+│   ├── groq.py               # Groq アダプター
+│   ├── cerebras.py           # Cerebras アダプター
+│   └── ollama.py             # Ollama ローカルアダプター
 │
 ├── router/
 │   ├── __init__.py
@@ -63,8 +67,13 @@ openrouter-routing/
 
 ```bash
 cp .env.example .env
-# .env を編集して OPENROUTER_API_KEY を設定
+# .env を編集して各プロバイダーの API キーを設定:
+# - OPENROUTER_API_KEY (OpenRouter を有効化する場合は必須)
+# - GROQ_API_KEY (Groq を有効化する場合は必須)
+# - CEREBRAS_API_KEY (Cerebras を有効化する場合は必須)
 ```
+
+`config.yaml` でプロバイダーの有効/無効を設定できます。
 
 ### 2. 起動
 
@@ -88,21 +97,20 @@ curl -X POST http://127.0.0.1:4141/v1/chat/completions \
 
 ## 設定
 
-`config.json` で以下を調整可能：
+`config.yaml` で以下を調整可能：
 
-| 項目　　　　　　　　　　　　　| 説明　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　|
-| -------------------------------| -----------------------------------------------------------------------|
-| `timeout_seconds`　　　　　　 | 各モデルへのリクエストタイムアウト（秒）　　　　　　　　　　　　　　　|
-| `model_cache_ttl_seconds`　　 | モデルリストキャッシュ有効期限（秒）　　　　　　　　　　　　　　　　　|
-| `exclude_keywords`　　　　　　| 除外するモデルのキーワード（日本語に弱いモデル等）　　　　　　　　　　|
-| `priority_keywords`　　　　　 | モデル優先順位キーワード　　　　　　　　　　　　　　　　　　　　　　　|
-| `ollama_model`　　　　　　　　| ローカル Fallback モデル名　　　　　　　　　　　　　　　　　　　　　　|
-| `verify_tool_support`　　　　 | 起動時に新規モデルのツール呼び出し対応を検証する（デフォルト `true`） |
-| `verify_timeout_seconds`　　　| 検証リクエストのタイムアウト（秒）　　　　　　　　　　　　　　　　　　|
-| `tool_support_cache_file`　　 | 検証結果のキャッシュファイル名　　　　　　　　　　　　　　　　　　　　|
-| `rate_limit_cooldown_seconds` | 429 を返したモデルをスキップする秒数（デフォルト `60`、`0` で無効化） |
-| `not_found_cooldown_seconds`　| 404 を返したモデルをスキップする秒数（デフォルト `600`、存在しないモデル検出） |
-
+| 項目　　　　　　　　　　　　　 | 説明　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　         |
+| ------------------------------ | ------------------------------------------------------------------------------ |
+| `timeout_seconds`　　　　　　  | 各モデルへのリクエストタイムアウト（秒）　　　　　　　　　　　　　　　         |
+| `model_cache_ttl_seconds`　　  | モデルリストキャッシュ有効期限（秒）　　　　　　　　　　　　　　　　　         |
+| `exclude_keywords`　　　　　　 | 除外するモデルのキーワード（日本語に弱いモデル等）　　　　　　　　　　         |
+| `priority_keywords`　　　　　  | モデル優先順位キーワード　　　　　　　　　　　　　　　　　　　　　　　         |
+| `ollama_model`　　　　　　　　 | ローカル Fallback モデル名　　　　　　　　　　　　　　　　　　　　　　         |
+| `verify_tool_support`　　　　  | 起動時に新規モデルのツール呼び出し対応を検証する（デフォルト `true`）          |
+| `verify_timeout_seconds`　　　 | 検証リクエストのタイムアウト（秒）　　　　　　　　　　　　　　　　　　         |
+| `tool_support_cache_file`　　  | 検証結果のキャッシュファイル名　　　　　　　　　　　　　　　　　　　　         |
+| `rate_limit_cooldown_seconds`  | 429 を返したモデルをスキップする秒数（デフォルト `60`、`0` で無効化）          |
+| `not_found_cooldown_seconds`　 | 404 を返したモデルをスキップする秒数（デフォルト `600`、存在しないモデル検出） |
 
 ### ツール呼び出し検証の動作
 

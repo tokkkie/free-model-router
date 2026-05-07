@@ -97,7 +97,7 @@ curl -X POST http://127.0.0.1:4141/v1/chat/completions \
 
 ## Configuration
 
-All settings are in `config.json`:
+All settings are in `config.yaml`:
 
 | Key                           | Description                                                                 |
 | ----------------------------- | --------------------------------------------------------------------------- |
