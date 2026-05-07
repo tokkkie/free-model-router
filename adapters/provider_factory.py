@@ -6,6 +6,7 @@ from .openrouter import OpenRouterAdapter
 from .groq import GroqAdapter
 from .ollama import OllamaAdapter
 from .cerebras import CerebrasAdapter
+from .sambanova import SambaNovaAdapter
 
 logger = logging.getLogger(__name__)
 
@@ -53,4 +54,5 @@ class ProviderFactory:
 ProviderFactory.register("openrouter", OpenRouterAdapter)
 ProviderFactory.register("groq", GroqAdapter)
 ProviderFactory.register("cerebras", CerebrasAdapter)
+ProviderFactory.register("sambanova", SambaNovaAdapter)
 ProviderFactory.register("ollama", OllamaAdapter)
