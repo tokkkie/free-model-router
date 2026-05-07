@@ -2,7 +2,7 @@
 
 ## 概要
 
-OpenRouter Routing Proxy は、複数の無料AIモデルを自動的に選択・フォールオーバーするプロキシサーバーです。
+Free Model Router は、複数の無料AIモデルを自動的に選択・フォールオーバーするプロキシサーバーです。
 
 ## 初回起動時の動作
 
@@ -179,6 +179,7 @@ enabled_providers:
   - openrouter
   - groq
   # - cerebras
+  # - sambanova
   - ollama
 
 providers:
@@ -195,6 +196,14 @@ providers:
     base_url: https://api.groq.com/openai/v1
     min_context_window: 120000
     min_max_completion_tokens: 30000
+
+  cerebras:
+    base_url: https://api.cerebras.ai/v1
+
+  sambanova:
+    base_url: https://api.sambanova.ai/v1
+    min_context_window: 128000
+    min_max_completion_tokens: 8192
 
   ollama:
     base_url: http://localhost:11434
