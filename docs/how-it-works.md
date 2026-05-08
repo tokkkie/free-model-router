@@ -82,13 +82,13 @@ sequenceDiagram
             App-->>Client: Response
         else 429 Rate Limit
             OR-->>FR: 429
-            FR->>FR: Set COOLDOWN 120s
+            FR->>FR: Set COOLDOWN 600s
             FR->>FR: Try next model
         else Timeout
             FR->>FR: Try next model
         else 404 Not Found
             OR-->>FR: 404
-            FR->>FR: Set COOLDOWN 600s
+            FR->>FR: Set COOLDOWN 3600s
             FR->>FR: Try next model
         end
     end
@@ -133,7 +133,7 @@ sequenceDiagram
 | **Model list**    | Memory (`_cached_models`)          | Free model list             | 300 seconds                   |
 | **Tool support**  | `tool_support_cache.json`          | Per-model tool support flag | Persistent                    |
 | **Cooldown**      | Class variable (`_cooldown_until`) | Rate-limited model state    | In-process (reset on restart) |
-| **Ghost models**  | Memory cache                       | 404-detected models         | 600 seconds                   |
+| **Ghost models**  | Memory cache                       | 404/422-detected models     | 3600 seconds (1 hour)         |
 | **Known vendors** | `known_vendors.json`               | List of notified vendors    | Persistent                    |
 
 ---
@@ -144,7 +144,7 @@ Actual log output and corresponding behavior:
 
 ```
 2026-04-29 00:13:38,349 [WARNING] 429 Rate limit   qwen/qwen3-next-80b-a3b-instruct:free
-2026-04-29 00:13:38,349 [INFO] COOLDOWN 120s   qwen/qwen3-next-80b-a3b-instruct:free
+2026-04-29 00:13:38,349 [INFO] COOLDOWN 600s   qwen/qwen3-next-80b-a3b-instruct:free
 2026-04-29 00:13:50,310 [INFO] 200 OK (stream)   z-ai/glm-4.5-air:free
 ```
 
@@ -156,7 +156,7 @@ sequenceDiagram
 
     FR->>qwen: Request
     qwen-->>FR: 429 Rate Limit
-    FR->>FR: Set COOLDOWN 120s
+    FR->>FR: Set COOLDOWN 600s
     FR->>glm: Request
     glm-->>FR: 200 OK
     FR-->>FR: Return response
@@ -170,8 +170,8 @@ sequenceDiagram
 global:
   timeout_seconds: 15
   model_cache_ttl_seconds: 300
-  rate_limit_cooldown_seconds: 120
-  not_found_cooldown_seconds: 600
+  rate_limit_cooldown_seconds: 600
+  not_found_cooldown_seconds: 3600
   verify_tool_support: true
   cache_dir: .cache
 
@@ -213,8 +213,8 @@ providers:
 - **`enabled_providers`**: List of active providers (comment out to disable)
 - **`exclude_keywords`**: Model name keywords to exclude from routing
 - **`priority_keywords`**: Priority rules — lower value = higher priority
-- **`rate_limit_cooldown_seconds`**: How long to skip a model after a 429
-- **`not_found_cooldown_seconds`**: How long to skip a model after a 404
+- **`rate_limit_cooldown_seconds`**: How long to skip a model after a 429 (default: 600s, 10 minutes)
+- **`not_found_cooldown_seconds`**: How long to skip a model after a 404/422 (default: 3600s, 1 hour)
 
 ---
 
@@ -223,5 +223,5 @@ providers:
 1. **Startup**: Fetch free models, sort by priority, verify tool support
 2. **Per request**: Try models in order, auto-skip on 429
 3. **Fallback**: Route to local Ollama when all cloud models fail
-4. **Cooldown**: Automatically skip rate-limited models for 120 seconds
-5. **Ghost model handling**: 404 errors trigger 600s cooldown to exclude removed models
+4. **Cooldown**: Automatically skip rate-limited models for 600 seconds (10 minutes)
+5. **Ghost model handling**: 404/422 errors trigger 3600s cooldown (1 hour) to exclude removed/unavailable models

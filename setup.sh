@@ -34,6 +34,13 @@ fi
 HOST="${SERVER_HOST:-127.0.0.1}"
 PORT="${SERVER_PORT:-4141}"
 
+# 既存プロセスを停止
+if lsof -ti:${PORT} > /dev/null 2>&1; then
+  echo "[setup] Stopping existing process on port ${PORT}..."
+  lsof -ti:${PORT} | xargs kill -9 2>/dev/null || true
+  sleep 1
+fi
+
 echo "[setup] Starting proxy on http://${HOST}:${PORT} ..."
 exec "${SCRIPT_DIR}/venv/bin/uvicorn" main:app \
   --host "${HOST}" \

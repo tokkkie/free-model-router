@@ -131,6 +131,10 @@ class SambaNovaAdapter(AbstractLLMAdapter):
             if resp.status_code == 404:
                 last_error = NotFoundError(f"SambaNova 404 ({m})")
                 continue
+            if resp.status_code == 422:
+                # 422 UNPROCESSABLE ENTITY はモデルが利用不可なので 600s クールダウン
+                last_error = NotFoundError(f"SambaNova 422 ({m})")
+                continue
             if not resp.is_success:
                 last_error = ProviderError(f"SambaNova {resp.status_code} ({m}): {resp.text[:200]}")
                 continue
@@ -169,6 +173,12 @@ class SambaNovaAdapter(AbstractLLMAdapter):
                     await resp.aclose()
                     await client.aclose()
                     last_error = NotFoundError(f"SambaNova 404 ({m})")
+                    continue
+                if resp.status_code == 422:
+                    await resp.aclose()
+                    await client.aclose()
+                    # 422 UNPROCESSABLE ENTITY はモデルが利用不可なので 600s クールダウン
+                    last_error = NotFoundError(f"SambaNova 422 ({m})")
                     continue
                 if not resp.is_success:
                     err = await resp.aread()

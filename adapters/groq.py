@@ -16,9 +16,17 @@ _MIN_MAX_COMPLETION_TOKENS = 30000
 class GroqAdapter(AbstractLLMAdapter):
     """Groq API アダプター（OpenAI 互換）"""
 
-    def __init__(self, api_key: str, base_url: str = "https://api.groq.com/openai/v1") -> None:
+    def __init__(
+        self,
+        api_key: str,
+        base_url: str = "https://api.groq.com/openai/v1",
+        min_context_window: int = _MIN_CONTEXT_WINDOW,
+        min_max_completion_tokens: int = _MIN_MAX_COMPLETION_TOKENS
+    ) -> None:
         self._api_key = api_key
         self._base_url = base_url.rstrip("/")
+        self._min_context_window = min_context_window
+        self._min_max_completion_tokens = min_max_completion_tokens
         self._available_models: list[str] = []
 
     @property
@@ -33,7 +41,9 @@ class GroqAdapter(AbstractLLMAdapter):
             return None
         return cls(
             api_key=api_key,
-            base_url=config.get("base_url", "https://api.groq.com/openai/v1")
+            base_url=config.get("base_url", "https://api.groq.com/openai/v1"),
+            min_context_window=config.get("min_context_window", _MIN_CONTEXT_WINDOW),
+            min_max_completion_tokens=config.get("min_max_completion_tokens", _MIN_MAX_COMPLETION_TOKENS),
         )
 
     def _headers(self) -> dict:
@@ -59,15 +69,15 @@ class GroqAdapter(AbstractLLMAdapter):
         all_models = data.get("data", [])
         usable = [
             m for m in all_models
-            if m.get("context_window", 0) > _MIN_CONTEXT_WINDOW
-            and m.get("max_completion_tokens", 0) > _MIN_MAX_COMPLETION_TOKENS
+            if m.get("context_window", 0) >= self._min_context_window
+            and m.get("max_completion_tokens", 0) >= self._min_max_completion_tokens
         ]
         self._available_models = [m["id"] for m in usable]
         logger.info(
             f"Groq models: {len(all_models)} total, "
             f"{len(self._available_models)} usable "
-            f"(context_window>{_MIN_CONTEXT_WINDOW}, "
-            f"max_completion_tokens>{_MIN_MAX_COMPLETION_TOKENS})"
+            f"(context_window>={self._min_context_window}, "
+            f"max_completion_tokens>={self._min_max_completion_tokens})"
         )
         for m in usable:
             logger.info(f"  {m['id']} (ctx={m.get('context_window')}, max_out={m.get('max_completion_tokens')})")
@@ -90,13 +100,39 @@ class GroqAdapter(AbstractLLMAdapter):
         logger.debug(f"Groq model unresolved, passing through: {model}")
         return model
 
-    def _normalize_response(self, response: dict) -> None:
+    def _filter_tool_calls_from_chunk(self, chunk: bytes) -> bytes:
+        """SSE チャンクから tool_calls を除去"""
+        try:
+            lines = chunk.decode('utf-8').split('\n')
+            filtered_lines = []
+            for line in lines:
+                if line.startswith('data: ') and line != 'data: [DONE]':
+                    try:
+                        data = json.loads(line[6:])  # "data: " を除去
+                        if "choices" in data:
+                            for choice in data["choices"]:
+                                if "delta" in choice:
+                                    choice["delta"].pop("tool_calls", None)
+                        filtered_lines.append(f"data: {json.dumps(data)}")
+                    except json.JSONDecodeError:
+                        filtered_lines.append(line)
+                else:
+                    filtered_lines.append(line)
+            return '\n'.join(filtered_lines).encode('utf-8')
+        except Exception:
+            # エラー時は元のチャンクをそのまま返す
+            return chunk
+
+    def _normalize_response(self, response: dict, remove_tool_calls: bool = False) -> None:
         """Groq 固有のフィールドを除去（OpenAI 互換形式に正規化）"""
         if "choices" in response:
             for choice in response["choices"]:
                 if "message" in choice:
                     # reasoning フィールドを除去
                     choice["message"].pop("reasoning", None)
+                    # tool_choice が none の場合は tool_calls も除去
+                    if remove_tool_calls:
+                        choice["message"].pop("tool_calls", None)
         # Groq 固有のメタデータフィールドを除去
         response.pop("usage_breakdown", None)
         response.pop("x_groq", None)
@@ -111,12 +147,15 @@ class GroqAdapter(AbstractLLMAdapter):
             resolved = self._resolve_model(m)
             body = {**payload, "model": resolved, "stream": False}
 
-            # tool_choice が "none" の場合のみ tools も除去
+            # tool_choice の処理
+            remove_tool_calls = False
             if body.get("tool_choice") == "none":
+                # "none" の場合は tools も除去
                 body.pop("tools", None)
                 body.pop("tool_choice", None)
-            elif "tool_choice" in body:
-                # それ以外は "auto" に変更
+                remove_tool_calls = True
+            elif "tools" in body:
+                # tools が存在する場合は tool_choice を "auto" に設定
                 body["tool_choice"] = "auto"
             try:
                 async with httpx.AsyncClient(timeout=timeout) as client:
@@ -151,7 +190,7 @@ class GroqAdapter(AbstractLLMAdapter):
 
             # Groq 固有のフィールドを除去
             response_data = resp.json()
-            self._normalize_response(response_data)
+            self._normalize_response(response_data, remove_tool_calls=remove_tool_calls)
             return response_data
 
         # 全モデル失敗
@@ -170,12 +209,15 @@ class GroqAdapter(AbstractLLMAdapter):
             resolved = self._resolve_model(m)
             body = {**payload, "model": resolved, "stream": True}
 
-            # tool_choice が "none" の場合のみ tools も除去
+            # tool_choice の処理
+            remove_tool_calls = False
             if body.get("tool_choice") == "none":
+                # "none" の場合は tools も除去
                 body.pop("tools", None)
                 body.pop("tool_choice", None)
-            elif "tool_choice" in body:
-                # それ以外は "auto" に変更
+                remove_tool_calls = True
+            elif "tools" in body:
+                # tools が存在する場合は tool_choice を "auto" に設定
                 body["tool_choice"] = "auto"
             client = httpx.AsyncClient(timeout=timeout)
             try:
@@ -215,9 +257,12 @@ class GroqAdapter(AbstractLLMAdapter):
                     last_error = ProviderError(f"Groq {resp.status_code} ({resolved}): {err[:200]}")
                     continue
 
-                # 成功: レスポンスをそのまま転送
+                # 成功: レスポンスを転送（tool_calls 除去が必要な場合はフィルタリング）
                 try:
                     async for chunk in resp.aiter_bytes():
+                        if chunk and remove_tool_calls:
+                            # SSE チャンクから tool_calls を除去
+                            chunk = self._filter_tool_calls_from_chunk(chunk)
                         if chunk:
                             yield chunk
                     return
