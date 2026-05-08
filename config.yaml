@@ -22,7 +22,7 @@ global:
   # ツールサポートの検証を有効化
   # true: 起動時に各モデルの tool calling サポート状況を確認
   # false: 検証をスキップ（起動が高速化）
-  verify_tool_support: false
+  verify_tool_support: true
 
   # ツールサポート検証のタイムアウト（秒）
   verify_timeout_seconds: 15
@@ -89,8 +89,6 @@ providers:
     base_url: https://api.groq.com/openai/v1
 
     # モデルフィルタリング条件
-    # これらの条件を満たすモデルのみ利用可能とする
-
     # 最小コンテキストウィンドウサイズ
     # この値より小さい context_window のモデルは除外される
     min_context_window: 120000
@@ -111,8 +109,14 @@ providers:
     # - capabilities.tools = true
     # - capabilities.tool_choice = true
     # - architecture.modality = "text"
-    # - limits.max_context_length >= 120000
-    # - limits.max_completion_tokens >= 30000
+    # - limits.max_context_length >= min_context_window
+    # - limits.max_completion_tokens >= min_max_completion_tokens
+
+    # 最小コンテキストウィンドウサイズ
+    min_context_window: 120000
+
+    # 最小最大補完トークン数
+    min_max_completion_tokens: 30000
 
     # 注意: Cerebras はレートリミットが厳しいため、
     # 起動時のモデルリスト取得で複数のAPIコールが発生します

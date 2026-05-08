@@ -15,9 +15,17 @@ _MIN_MAX_COMPLETION_TOKENS = 30000
 class CerebrasAdapter(AbstractLLMAdapter):
     """Cerebras API アダプター（OpenAI 互換）"""
 
-    def __init__(self, api_key: str, base_url: str = "https://api.cerebras.ai/v1") -> None:
+    def __init__(
+        self,
+        api_key: str,
+        base_url: str = "https://api.cerebras.ai/v1",
+        min_context_window: int = _MIN_CONTEXT_WINDOW,
+        min_max_completion_tokens: int = _MIN_MAX_COMPLETION_TOKENS
+    ) -> None:
         self._api_key = api_key
         self._base_url = base_url.rstrip("/")
+        self._min_context_window = min_context_window
+        self._min_max_completion_tokens = min_max_completion_tokens
         self._available_models: list[str] = []
 
     @property
@@ -32,7 +40,9 @@ class CerebrasAdapter(AbstractLLMAdapter):
             return None
         return cls(
             api_key=api_key,
-            base_url=config.get("base_url", "https://api.cerebras.ai/v1")
+            base_url=config.get("base_url", "https://api.cerebras.ai/v1"),
+            min_context_window=config.get("min_context_window", _MIN_CONTEXT_WINDOW),
+            min_max_completion_tokens=config.get("min_max_completion_tokens", _MIN_MAX_COMPLETION_TOKENS),
         )
 
     def _headers(self) -> dict:
@@ -82,8 +92,8 @@ class CerebrasAdapter(AbstractLLMAdapter):
                     capabilities.get("tools") is True
                     and capabilities.get("tool_choice") is True
                     and architecture.get("modality") == "text"
-                    and limits.get("max_context_length", 0) >= _MIN_CONTEXT_WINDOW
-                    and limits.get("max_completion_tokens", 0) >= _MIN_MAX_COMPLETION_TOKENS
+                    and limits.get("max_context_length", 0) >= self._min_context_window
+                    and limits.get("max_completion_tokens", 0) >= self._min_max_completion_tokens
                 ):
                     usable_models.append({
                         "id": model_id,
@@ -98,8 +108,8 @@ class CerebrasAdapter(AbstractLLMAdapter):
         logger.info(
             f"Cerebras models: {len(model_ids)} total, "
             f"{len(self._available_models)} usable "
-            f"(context_window>={_MIN_CONTEXT_WINDOW}, "
-            f"max_completion_tokens>={_MIN_MAX_COMPLETION_TOKENS}, "
+            f"(context_window>={self._min_context_window}, "
+            f"max_completion_tokens>={self._min_max_completion_tokens}, "
             f"tools=true, modality=text)"
         )
         for m in usable_models:
