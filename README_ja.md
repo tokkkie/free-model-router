@@ -101,18 +101,18 @@ curl -X POST http://127.0.0.1:4141/v1/chat/completions \
 
 `config.yaml` で以下を調整可能：
 
-| 項目　　　　　　　　　　　　　 | 説明　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　         |
-| ------------------------------ | ------------------------------------------------------------------------------ |
-| `timeout_seconds`　　　　　　  | 各モデルへのリクエストタイムアウト（秒）　　　　　　　　　　　　　　　         |
-| `model_cache_ttl_seconds`　　  | モデルリストキャッシュ有効期限（秒）　　　　　　　　　　　　　　　　　         |
-| `exclude_keywords`　　　　　　 | 除外するモデルのキーワード（日本語に弱いモデル等）　　　　　　　　　　         |
-| `priority_keywords`　　　　　  | モデル優先順位キーワード　　　　　　　　　　　　　　　　　　　　　　　         |
-| `ollama_model`　　　　　　　　 | ローカル Fallback モデル名　　　　　　　　　　　　　　　　　　　　　　         |
-| `verify_tool_support`　　　　  | 起動時に新規モデルのツール呼び出し対応を検証する（デフォルト `true`）          |
-| `verify_timeout_seconds`　　　 | 検証リクエストのタイムアウト（秒）　　　　　　　　　　　　　　　　　　         |
-| `tool_support_cache_file`　　  | 検証結果のキャッシュファイル名　　　　　　　　　　　　　　　　　　　　         |
-| `rate_limit_cooldown_seconds`  | 429 を返したモデルをスキップする秒数（デフォルト `60`、`0` で無効化）          |
-| `not_found_cooldown_seconds`　 | 404 を返したモデルをスキップする秒数（デフォルト `600`、存在しないモデル検出） |
+| 項目　　　　　　　　　　　　　 | 説明　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　                     |
+| ------------------------------ | ------------------------------------------------------------------------------------------ |
+| `timeout_seconds`　　　　　　  | 各モデルへのリクエストタイムアウト（秒）　　　　　　　　　　　　　　　                     |
+| `model_cache_ttl_seconds`　　  | モデルリストキャッシュ有効期限（秒）　　　　　　　　　　　　　　　　　                     |
+| `exclude_keywords`　　　　　　 | 除外するモデルのキーワード（日本語に弱いモデル等）　　　　　　　　　　                     |
+| `priority_keywords`　　　　　  | モデル優先順位キーワード　　　　　　　　　　　　　　　　　　　　　　　                     |
+| `ollama_model`　　　　　　　　 | ローカル Fallback モデル名　　　　　　　　　　　　　　　　　　　　　　                     |
+| `verify_tool_support`　　　　  | 起動時に新規モデルのツール呼び出し対応を検証する（デフォルト `true`）                      |
+| `verify_timeout_seconds`　　　 | 検証リクエストのタイムアウト（秒）　　　　　　　　　　　　　　　　　　                     |
+| `tool_support_cache_file`　　  | 検証結果のキャッシュファイル名　　　　　　　　　　　　　　　　　　　　                     |
+| `rate_limit_cooldown_seconds`  | 429 を返したモデルをスキップする秒数（デフォルト `600`、10分）                             |
+| `not_found_cooldown_seconds`　 | 404/422 を返したモデルをスキップする秒数（デフォルト `3600`、1時間、存在しないモデル検出） |
 
 ### ツール呼び出し検証の動作
 

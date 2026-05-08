@@ -82,13 +82,13 @@ sequenceDiagram
             App-->>Client: 応答
         else 429 Rate Limit
             OR-->>FR: 429
-            FR->>FR: COOLDOWN 120s設定
+            FR->>FR: COOLDOWN 600s設定
             FR->>FR: 次のモデルへ
         else Timeout
             FR->>FR: 次のモデルへ
         else 404 Not Found
             OR-->>FR: 404
-            FR->>FR: COOLDOWN 600s設定
+            FR->>FR: COOLDOWN 3600s設定
             FR->>FR: 次のモデルへ
         end
     end
@@ -133,7 +133,7 @@ sequenceDiagram
 | **モデルリスト**　　 | メモリ (`_cached_models`)　　　 | Freeモデル一覧　　　  | 300秒　　　　　　　　　　　　　 |
 | **ツール対応**　　　 | `tool_support_cache.json`　　　 | モデルごとの対応有無  | 永続　　　　　　　　　　　　　  |
 | **クールダウン**　　 | クラス変数 (`_cooldown_until`)  | 429モデルの休止状態　 | プロセス内（再起動でリセット）  |
-| **存在しないモデル** | メモリキャッシュ　　　　　　　  | 404検出モデル　　　　 | 600秒　　　　　　　　　　　　　 |
+| **存在しないモデル** | メモリキャッシュ　　　　　　　  | 404/422検出モデル　　 | 3600秒（1時間）　　　　　　　　 |
 | **既知ベンダー**　　 | `known_vendors.json`　　　　　  | 通知済みベンダー一覧  | 永続　　　　　　　　　　　　　  |
 
 ---
@@ -144,7 +144,7 @@ sequenceDiagram
 
 ```
 2026-04-29 00:13:38,349 [WARNING] 429 Rate limit   qwen/qwen3-next-80b-a3b-instruct:free
-2026-04-29 00:13:38,349 [INFO] COOLDOWN 120s   qwen/qwen3-next-80b-a3b-instruct:free
+2026-04-29 00:13:38,349 [INFO] COOLDOWN 600s   qwen/qwen3-next-80b-a3b-instruct:free
 2026-04-29 00:13:50,310 [INFO] 200 OK (stream)   z-ai/glm-4.5-air:free
 ```
 
@@ -156,7 +156,7 @@ sequenceDiagram
 
     FR->>qwen: リクエスト
     qwen-->>FR: 429 Rate Limit
-    FR->>FR: COOLDOWN 120s設定
+    FR->>FR: COOLDOWN 600s設定
     FR->>glm: リクエスト
     glm-->>FR: 200 OK
     FR-->>FR: 応答返却
@@ -170,8 +170,8 @@ sequenceDiagram
 global:
   timeout_seconds: 15
   model_cache_ttl_seconds: 300
-  rate_limit_cooldown_seconds: 120
-  not_found_cooldown_seconds: 600
+  rate_limit_cooldown_seconds: 600
+  not_found_cooldown_seconds: 3600
   verify_tool_support: true
   cache_dir: .cache
 
@@ -215,8 +215,8 @@ providers:
 - **`enabled_providers`**: 有効なプロバイダーのリスト（コメントアウトで無効化）
 - **`exclude_keywords`**: 除外するモデル名のキーワード
 - **`priority_keywords`**: 優先順位付けルール（priority値が小さいほど先頭）
-- **`rate_limit_cooldown_seconds`**: 429発生時の休止時間（秒）
-- **`not_found_cooldown_seconds`**: 404発生時の休止時間（秒）
+- **`rate_limit_cooldown_seconds`**: 429発生時の休止時間（デフォルト: 600秒、10分）
+- **`not_found_cooldown_seconds`**: 404/422発生時の休止時間（デフォルト: 3600秒、1時間）
 
 ---
 
@@ -225,5 +225,5 @@ providers:
 1. **起動時**: Freeモデルを取得・整列・ツール検証
 2. **リクエスト時**: 上位モデルから順に試行、429は自動休止
 3. **フォールバック**: 全モデル失敗時はローカルOllamaへ
-4. **クールダウン**: 429モデルを120秒間自動スキップ
-5. **存在しないモデル対応**: 404エラー時は600秒クールダウンで除外済みモデルを回避
+4. **クールダウン**: 429モデルを600秒間（10分）自動スキップ
+5. **存在しないモデル対応**: 404/422エラー時は3600秒クールダウン（1時間）で削除済み/利用不可モデルを回避

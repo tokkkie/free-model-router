@@ -101,18 +101,18 @@ curl -X POST http://127.0.0.1:4141/v1/chat/completions \
 
 All settings are in `config.yaml`:
 
-| Key                           | Description                                                                 |
-| ----------------------------- | --------------------------------------------------------------------------- |
-| `timeout_seconds`             | Request timeout per model (seconds)                                         |
-| `model_cache_ttl_seconds`     | How long to cache the model list (seconds)                                  |
-| `exclude_keywords`            | Keywords to exclude models (e.g. models weak at your language)              |
-| `priority_keywords`           | Keywords for model priority ordering                                        |
-| `ollama_model`                | Local fallback model name                                                   |
-| `verify_tool_support`         | Test function calling support on startup (default: `true`)                  |
-| `verify_timeout_seconds`      | Timeout for verification requests (seconds)                                 |
-| `tool_support_cache_file`     | File name for caching verification results                                  |
-| `rate_limit_cooldown_seconds` | Seconds to skip a model after a 429 (default: `60`, set `0` to disable)     |
-| `not_found_cooldown_seconds`  | Seconds to skip a model after a 404 (default: `600`, ghost model detection) |
+| Key                           | Description                                                       |
+| ----------------------------- | ----------------------------------------------------------------- |
+| `timeout_seconds`             | Request timeout per model (seconds)                               |
+| `model_cache_ttl_seconds`     | How long to cache the model list (seconds)                        |
+| `exclude_keywords`            | Keywords to exclude models (e.g. models weak at your language)    |
+| `priority_keywords`           | Keywords for model priority ordering                              |
+| `ollama_model`                | Local fallback model name                                         |
+| `verify_tool_support`         | Test function calling support on startup (default: `true`)        |
+| `verify_timeout_seconds`      | Timeout for verification requests (seconds)                       |
+| `tool_support_cache_file`     | File name for caching verification results                        |
+| `rate_limit_cooldown_seconds` | Seconds to skip a model after a 429 (default: `600`, 10 minutes)  |
+| `not_found_cooldown_seconds`  | Seconds to skip a model after a 404/422 (default: `3600`, 1 hour) |
 
 ## Tool Call Verification
 
