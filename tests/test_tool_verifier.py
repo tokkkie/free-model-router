@@ -8,7 +8,7 @@ for mod in list(sys.modules.keys()):
     if mod.startswith("adapters.") or mod.startswith("router."):
         del sys.modules[mod]
 
-from adapters.base import ProviderError, ProviderTimeoutError, RateLimitError
+from adapters.base import NotFoundError, ProviderError, ProviderTimeoutError, RateLimitError
 from router.tool_verifier import verify_tool_support
 
 
@@ -87,6 +87,13 @@ class TestVerifyToolSupport:
         adapter = _FakeAdapter(exc=ProviderError("500"))
         result = await verify_tool_support(adapter, "x/y:free", timeout=5.0)
         assert result is None
+
+    @pytest.mark.asyncio
+    async def test_returns_false_on_not_found_error(self):
+        """404 NotFoundError が発生した場合は非対応として扱う"""
+        adapter = _FakeAdapter(exc=NotFoundError("OpenRouter 404 (x/y:free)"))
+        result = await verify_tool_support(adapter, "x/y:free", timeout=5.0)
+        assert result is False
 
     @pytest.mark.asyncio
     async def test_returns_false_on_explicit_no_tool_support_error(self):
