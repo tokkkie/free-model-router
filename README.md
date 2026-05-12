@@ -12,7 +12,7 @@ Free Model Router cycles through multiple providers' free models automatically.
 When one fails (429 or timeout), it moves on to the next without you doing anything.
 No more manual model switching. No more babysitting rate limits.
 
-If everything fails, it falls back to a local Ollama instance (basic implementation for now).
+If everything fails, it falls back to a local Ollama instance.
 
 Run it locally and point your OpenAI-compatible client at it. That's it.
 
@@ -84,7 +84,7 @@ Edit `config.yaml` to enable/disable providers and configure settings.
 ```
 
 On first run, this creates a virtual environment and installs dependencies.
-Subsequent runs start the server directly (default: `http://127.0.0.1:4141`).
+Subsequent runs start the server directly (default: `http://127.0.0.1:4141/v1`).
 
 ### 3. Verify it's working
 
