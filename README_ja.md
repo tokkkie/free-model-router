@@ -35,8 +35,8 @@
 free-model-router/
 ├── main.py                   # FastAPI サーバー本体
 ├── config.yaml               # プロバイダー設定・タイムアウト・優先度設定
-├── setup.sh                  # venv 作成・依存インストール・起動
-├── requirements.txt          # Python 依存パッケージ
+├── run.sh                    # uv sync・依存インストール・起動
+├── pyproject.toml            # Python 依存パッケージとプロジェクトメタデータ
 ├── known_vendors.json        # 既知ベンダーリスト（自動更新）
 │
 ├── adapters/
@@ -64,6 +64,13 @@ free-model-router/
 
 ## セットアップ
 
+### 0. uv のインストール
+
+```bash
+# uv がインストールされていない場合
+curl -LsSf https://astral.sh/uv/install.sh | sh
+```
+
 ### 1. API キー設定
 
 ```bash
@@ -80,10 +87,10 @@ cp .env.example .env
 ### 2. 起動
 
 ```bash
-./setup.sh
+./run.sh
 ```
 
-初回実行時は venv 作成・依存インストール後、`.env` が作成されます。  
+初回実行時は `uv` で依存関係を同期し、`.venv` を自動作成します。  
 2回目以降は直接サーバーが起動します（デフォルト: `http://127.0.0.1:4141/v1`）。
 
 ### 3. 動作確認

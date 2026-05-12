@@ -3,21 +3,22 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
+# uvの存在チェック
+if ! command -v uv >/dev/null 2>&1; then
+  echo "uv not found. Please install uv: https://astral.sh/uv/"
+  exit 1
+fi
+
 # --debug オプションの処理
 if [[ "${1:-}" == "--debug" ]]; then
   export LOG_LEVEL=DEBUG
   shift
 fi
 
-# --- 仮想環境 ---
-if [ ! -d "${SCRIPT_DIR}/venv" ]; then
-  echo "[setup] Creating virtual environment..."
-  python3 -m venv "${SCRIPT_DIR}/venv"
-fi
-
-echo "[setup] Installing dependencies..."
-"${SCRIPT_DIR}/venv/bin/pip" install --upgrade pip -q
-"${SCRIPT_DIR}/venv/bin/pip" install -r "${SCRIPT_DIR}/requirements.txt" -q
+# --- 依存関係の同期 ---
+echo "[setup] Syncing dependencies..."
+cd "${SCRIPT_DIR}"
+uv sync -q
 echo "[setup] Dependencies installed."
 
 # --- .env ---
@@ -42,7 +43,7 @@ if lsof -ti:${PORT} > /dev/null 2>&1; then
 fi
 
 echo "[setup] Starting proxy on http://${HOST}:${PORT} ..."
-exec "${SCRIPT_DIR}/venv/bin/uvicorn" main:app \
+exec uv run uvicorn main:app \
   --host "${HOST}" \
   --port "${PORT}" \
   --reload \

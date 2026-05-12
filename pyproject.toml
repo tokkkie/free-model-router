@@ -1,0 +1,22 @@
+[project]
+name = "free-model-router"
+version = "0.1.0"
+description = "Multi-provider LLM router with automatic failover"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "fastapi==0.115.0",
+    "uvicorn[standard]==0.32.0",
+    "httpx==0.27.2",
+    "python-dotenv==1.2.2",
+    "pyyaml==6.0.2",
+    "pytest==9.0.3",
+    "pytest-asyncio==1.3.0",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["adapters", "router", "tests"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"

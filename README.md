@@ -35,8 +35,8 @@ Run it locally and point your OpenAI-compatible client at it. That's it.
 free-model-router/
 ├── main.py                   # FastAPI server
 ├── config.yaml               # Provider and global settings
-├── setup.sh                  # venv setup, dependency install, and server launch
-├── requirements.txt          # Python dependencies
+├── run.sh                    # Dependency sync and server launch
+├── pyproject.toml            # Python dependencies and project metadata
 ├── known_vendors.json        # Known vendor list (auto-updated)
 │
 ├── adapters/
@@ -64,6 +64,13 @@ free-model-router/
 
 ## Setup
 
+### 0. Install uv
+
+```bash
+# Install uv if not already installed
+curl -LsSf https://astral.sh/uv/install.sh | sh
+```
+
 ### 1. Configure API Keys
 
 ```bash
@@ -80,10 +87,10 @@ Edit `config.yaml` to enable/disable providers and configure settings.
 ### 2. Start the server
 
 ```bash
-./setup.sh
+./run.sh
 ```
 
-On first run, this creates a virtual environment and installs dependencies.
+On first run, this syncs dependencies using `uv` and creates `.venv` automatically.
 Subsequent runs start the server directly (default: `http://127.0.0.1:4141/v1`).
 
 ### 3. Verify it's working
