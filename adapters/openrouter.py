@@ -45,7 +45,7 @@ class OpenRouterAdapter(AbstractLLMAdapter):
             "Authorization": f"Bearer {self._api_key}",
             "Content-Type": "application/json",
             "HTTP-Referer": "http://localhost",
-            "X-Title": "openrouter-routing",
+            "X-Title": "free-model-router",
         }
 
     async def chat_completion(self, payload: dict, model: str, timeout: float) -> dict:

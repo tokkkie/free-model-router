@@ -1,4 +1,4 @@
-# AI Agents Rules (openrouter-routing)
+# AI Agents Rules (free-model-router)
 
 > **重要**: 作業開始前に `./README.md` を読み、設計思想と構造を把握すること。
 
@@ -53,7 +53,7 @@
 
 ---
 
-## 📋 PROJECT SPECIFIC (openrouter-routing)
+## 📋 PROJECT SPECIFIC (free-model-router)
 
 現時点でプロジェクト固有のルールはありません。
 必要に応じてこのセクションに追加してください。
