@@ -8,6 +8,7 @@ import logging
 
 from adapters.base import (
     AbstractLLMAdapter,
+    NotFoundError,
     ProviderError,
     ProviderTimeoutError,
     RateLimitError,
@@ -74,6 +75,9 @@ async def verify_tool_support(
     except (RateLimitError, ProviderTimeoutError) as exc:
         logger.info(f"Tool support verify deferred for {model}: {exc}")
         return None
+    except NotFoundError as exc:
+        logger.info(f"Model not found, marking as unsupported: {model}")
+        return False
     except ProviderError as exc:
         message = str(exc)
         if any(marker in message for marker in _NO_TOOL_SUPPORT_MARKERS):
