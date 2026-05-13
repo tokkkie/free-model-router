@@ -42,7 +42,7 @@ fi
 # prefix の取得
 prefix=$(echo "$commit_msg_filtered" | cut -d':' -f1)
 
-# 許可される prefix リスト（AGENTS.md 規約により強制）
+# 許可される prefix リスト
 common_prefixes="fix|feat|refactor|docs|chore|test|style|perf|ci|build|revert"
 
 if ! echo "$prefix" | grep -qE "^($common_prefixes)$"; then

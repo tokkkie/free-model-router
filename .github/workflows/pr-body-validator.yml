@@ -22,8 +22,8 @@ jobs:
           errors=0
 
           # --- タイトル prefix チェック ---
-          # AGENTS.md 規約: `prefix: 説明` 形式。prefix は feat/fix/chore/docs/refactor/test/perf/style/ci/build/revert
-          title_regex='^(feat|fix|chore|docs|refactor|test|perf|style|ci|build|revert)(\([^)]+\))?!?: .+'
+          # 規約: `prefix: 説明` 形式。prefix は feat/fix/chore/docs/refactor/test/perf/style/ci/build/revert
+          title_regex='^(feat|fix|chore|docs|refactor|test|perf|style|ci|build|revert): .+'
           if ! printf '%s' "$TITLE" | grep -qE "$title_regex"; then
             echo "::error title=Invalid PR Title::PRタイトルは '<prefix>: <説明>' 形式が必須です。"
             echo "  許可される prefix: feat|fix|chore|docs|refactor|test|perf|style|ci|build|revert"
@@ -61,14 +61,14 @@ jobs:
             return 0
           }
 
-          check_section "概要"     || errors=$((errors + 1))
-          check_section "変更内容" || errors=$((errors + 1))
-          check_section "テスト"   || errors=$((errors + 1))
+          check_section "Abstract" || errors=$((errors + 1))
+          check_section "Changes"  || errors=$((errors + 1))
+          check_section "Testing"  || errors=$((errors + 1))
 
           if [ "$errors" -gt 0 ]; then
             echo ""
             echo "検証失敗: ${errors} 件のエラー"
-            echo "参照: AGENTS.md / .github/pull_request_template.md"
+            echo "参照: .github/pull_request_template.md"
             exit 1
           fi
 
