@@ -1,0 +1,31 @@
+| Name              | Version   | License                              | URL                                                        |
+|-------------------|-----------|--------------------------------------|------------------------------------------------------------|
+| PyYAML            | 6.0.2     | MIT License                          | https://pyyaml.org/                                        |
+| Pygments          | 2.20.0    | BSD-2-Clause                         | https://pygments.org                                       |
+| annotated-types   | 0.7.0     | MIT License                          | https://github.com/annotated-types/annotated-types         |
+| anyio             | 4.13.0    | MIT                                  | https://anyio.readthedocs.io/en/stable/versionhistory.html |
+| certifi           | 2026.4.22 | Mozilla Public License 2.0 (MPL 2.0) | https://github.com/certifi/python-certifi                  |
+| click             | 8.3.3     | BSD-3-Clause                         | https://github.com/pallets/click/                          |
+| fastapi           | 0.115.0   | MIT License                          | https://github.com/fastapi/fastapi                         |
+| free-model-router | 0.1.0     | UNKNOWN                              | UNKNOWN                                                    |
+| h11               | 0.16.0    | MIT License                          | https://github.com/python-hyper/h11                        |
+| httpcore          | 1.0.9     | BSD-3-Clause                         | https://www.encode.io/httpcore/                            |
+| httptools         | 0.7.1     | MIT                                  | https://github.com/MagicStack/httptools                    |
+| httpx             | 0.27.2    | BSD-3-Clause                         | https://github.com/encode/httpx                            |
+| idna              | 3.14      | BSD-3-Clause                         | https://github.com/kjd/idna                                |
+| iniconfig         | 2.3.0     | MIT                                  | https://github.com/pytest-dev/iniconfig                    |
+| packaging         | 26.2      | Apache-2.0 OR BSD-2-Clause           | https://github.com/pypa/packaging                          |
+| pluggy            | 1.6.0     | MIT License                          | UNKNOWN                                                    |
+| pydantic          | 2.13.4    | MIT                                  | https://github.com/pydantic/pydantic                       |
+| pydantic_core     | 2.46.4    | MIT                                  | https://github.com/pydantic                                |
+| pytest            | 9.0.3     | MIT                                  | https://docs.pytest.org/en/latest/                         |
+| pytest-asyncio    | 1.3.0     | Apache-2.0                           | https://github.com/pytest-dev/pytest-asyncio               |
+| python-dotenv     | 1.2.2     | BSD-3-Clause                         | https://github.com/theskumar/python-dotenv                 |
+| sniffio           | 1.3.1     | Apache Software License; MIT License | https://github.com/python-trio/sniffio                     |
+| starlette         | 0.38.6    | BSD-3-Clause                         | https://github.com/encode/starlette                        |
+| typing-inspection | 0.4.2     | MIT                                  | https://github.com/pydantic/typing-inspection              |
+| typing_extensions | 4.15.0    | PSF-2.0                              | https://github.com/python/typing_extensions                |
+| uvicorn           | 0.32.0    | BSD-3-Clause                         | https://www.uvicorn.org/                                   |
+| uvloop            | 0.22.1    | Apache Software License; MIT License | UNKNOWN                                                    |
+| watchfiles        | 1.1.1     | MIT License                          | https://github.com/samuelcolvin/watchfiles                 |
+| websockets        | 16.0      | BSD-3-Clause                         | https://github.com/python-websockets/websockets            |
