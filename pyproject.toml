@@ -3,6 +3,7 @@ name = "free-model-router"
 version = "0.1.0"
 description = "Multi-provider LLM router with automatic failover"
 readme = "README.md"
+license = "MIT"
 requires-python = ">=3.10"
 dependencies = [
     "fastapi==0.115.0",
