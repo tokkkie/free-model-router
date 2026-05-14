@@ -7,7 +7,7 @@
 | certifi           | 2026.4.22 | Mozilla Public License 2.0 (MPL 2.0) | https://github.com/certifi/python-certifi                  |
 | click             | 8.3.3     | BSD-3-Clause                         | https://github.com/pallets/click/                          |
 | fastapi           | 0.115.0   | MIT License                          | https://github.com/fastapi/fastapi                         |
-| free-model-router | 0.1.0     | UNKNOWN                              | UNKNOWN                                                    |
+| free-model-router | 0.1.0     | MIT                                  | UNKNOWN                                                    |
 | h11               | 0.16.0    | MIT License                          | https://github.com/python-hyper/h11                        |
 | httpcore          | 1.0.9     | BSD-3-Clause                         | https://www.encode.io/httpcore/                            |
 | httptools         | 0.7.1     | MIT                                  | https://github.com/MagicStack/httptools                    |
