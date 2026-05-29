@@ -50,12 +50,42 @@ sequenceDiagram
 
 ## リクエスト時の動作
 
+### 翻訳プリプロセッサ（オプション）
+
+`preprocess.enable: true` の場合、英語以外のメッセージをクラウドへ転送する前にローカルOllamaで英語に翻訳します。
+
+```mermaid
+sequenceDiagram
+    participant Client as Client
+    participant App as FastAPI App
+    participant PP as TranslationPreprocessor
+    participant Ollama as Ollama (phi3:mini)
+
+    Client->>App: POST /v1/chat/completions（日本語）
+
+    App->>PP: preprocess(payload)
+    PP->>PP: userメッセージから言語を検出
+    alt 非英語を検出
+        PP->>Ollama: user/assistantメッセージを英語に翻訳
+        Ollama-->>PP: 翻訳済みテキスト
+        PP->>PP: systemメッセージに「Always respond in Japanese.」を付加
+    else 英語
+        PP->>PP: そのまま通過
+    end
+    PP-->>App: 変換済みペイロード
+```
+
+- `user` と `assistant` のみ翻訳。`system` メッセージは変更しません
+- 言語検出は `user` ロールのみで行います（`system` の英語ツール指示による誤検出を防止）
+- 翻訳には `preprocess.model`（小型・高速）を使用、フォールバック推論には `providers.ollama.model`（大型）を使用
+
 ### チャット補完リクエスト
 
 ```mermaid
 sequenceDiagram
     participant Client as Client
     participant App as FastAPI App
+    participant PP as TranslationPreprocessor
     participant MR as ModelRouter
     participant TSR as ToolSupportRegistry
     participant FR as FailoverRouter
@@ -63,6 +93,9 @@ sequenceDiagram
     participant Ollama as Ollama Local
 
     Client->>App: POST /v1/chat/completions
+
+    App->>PP: preprocess(payload)
+    PP-->>App: 翻訳済みペイロード（非英語の場合）
 
     App->>MR: get_free_models()
     MR->>MR: メモリキャッシュ確認（TTL: 300秒）
@@ -207,7 +240,12 @@ providers:
 
   ollama:
     base_url: http://localhost:11434
-    model: phi3.5:latest
+    model: qwen2.5-coder:14b  # クラウド全滅時の最終フォールバック用
+
+preprocess:
+  enable: true
+  model: phi3:mini            # 翻訳専用の小型・高速モデル
+  translate_timeout_seconds: 30
 ```
 
 ### キー設定の説明
@@ -217,13 +255,15 @@ providers:
 - **`priority_keywords`**: 優先順位付けルール（priority値が小さいほど先頭）
 - **`rate_limit_cooldown_seconds`**: 429発生時の休止時間（デフォルト: 600秒、10分）
 - **`not_found_cooldown_seconds`**: 404/422発生時の休止時間（デフォルト: 3600秒、1時間）
+- **`preprocess.model`**: 翻訳用Ollamaモデル（小型・高速推奨）。未指定時は `providers.ollama.model` にフォールバック
 
 ---
 
 ## まとめ
 
 1. **起動時**: Freeモデルを取得・整列・ツール検証
-2. **リクエスト時**: 上位モデルから順に試行、429は自動休止
-3. **フォールバック**: 全モデル失敗時はローカルOllamaへ
-4. **クールダウン**: 429モデルを600秒間（10分）自動スキップ
-5. **存在しないモデル対応**: 404/422エラー時は3600秒クールダウン（1時間）で削除済み/利用不可モデルを回避
+2. **翻訳**: 有効時、英語以外の入力をローカルOllamaで英語に翻訳してからクラウドへ転送
+3. **リクエスト時**: 上位モデルから順に試行、429は自動休止
+4. **フォールバック**: 全モデル失敗時はローカルOllamaへ
+5. **クールダウン**: 429モデルを600秒間（10分）自動スキップ
+6. **存在しないモデル対応**: 404/422エラー時は3600秒クールダウン（1時間）で削除済み/利用不可モデルを回避

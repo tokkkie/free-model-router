@@ -28,6 +28,7 @@
 - **ローカルフォールバック** — 全クラウドモデル失敗時は Ollama へフォールバック
 - **ストリーミング対応** — SSE 形式でリアルタイム応答
 - **ツール呼び出し自動検証** — 新規モデル検出時に function calling の可否を自動テストし、非対応モデルを自動除外
+- **翻訳プリプロセッサ** — 英語以外のメッセージをローカルOllamaで英語に翻訳してからクラウドに転送。クラウドLLMには元の言語で答えるよう指示を自動付加
 
 ## ディレクトリ構造
 
@@ -53,6 +54,7 @@ free-model-router/
 │   ├── __init__.py
 │   ├── model_router.py            # モデルリスト取得・優先順位付け
 │   ├── failover.py                # 429/タイムアウト検知・次モデルへ切替
+│   ├── preprocessor.py            # 翻訳プリプロセッサ（英語以外 → Ollamaで英語に翻訳）
 │   ├── tool_verifier.py           # モデルのツール呼び出し対応を検証
 │   └── tool_support_registry.py   # ツール対応モデルのキャッシュ管理
 │
@@ -114,12 +116,36 @@ curl -X POST http://127.0.0.1:4141/v1/chat/completions \
 | `model_cache_ttl_seconds`　　  | モデルリストキャッシュ有効期限（秒）　　　　　　　　　　　　　　　　　                     |
 | `exclude_keywords`　　　　　　 | 除外するモデルのキーワード（日本語に弱いモデル等）　　　　　　　　　　                     |
 | `priority_keywords`　　　　　  | モデル優先順位キーワード　　　　　　　　　　　　　　　　　　　　　　　                     |
-| `ollama_model`　　　　　　　　 | ローカル Fallback モデル名　　　　　　　　　　　　　　　　　　　　　　                     |
 | `verify_tool_support`　　　　  | 起動時に新規モデルのツール呼び出し対応を検証する（デフォルト `true`）                      |
 | `verify_timeout_seconds`　　　 | 検証リクエストのタイムアウト（秒）　　　　　　　　　　　　　　　　　　                     |
 | `tool_support_cache_file`　　  | 検証結果のキャッシュファイル名　　　　　　　　　　　　　　　　　　　　                     |
 | `rate_limit_cooldown_seconds`  | 429 を返したモデルをスキップする秒数（デフォルト `600`、10分）                             |
 | `not_found_cooldown_seconds`　 | 404/422 を返したモデルをスキップする秒数（デフォルト `3600`、1時間、存在しないモデル検出） |
+
+## 翻訳プリプロセッサ
+
+有効化すると、英語以外のメッセージをローカルOllamaで英語に翻訳してからクラウドプロバイダーに転送します。クラウドLLMには元の検出言語で答えるよう指示を自動付加します。
+
+`config.yaml` で設定します：
+
+```yaml
+preprocess:
+  enable: true
+  model: phi3:mini          # 翻訳用の小型・高速モデル
+  translate_timeout_seconds: 30
+
+providers:
+  ollama:
+    base_url: http://localhost:11434
+    model: qwen2.5-coder:14b  # クラウド全滅時のフォールバック用大型モデル
+```
+
+- **`preprocess.model`**: 翻訳に使用するOllamaモデル（`phi3:mini` などの小型・高速モデル推奨）
+- **`providers.ollama.model`**: クラウド全滅時の最終フォールバック用Ollamaモデル（高性能モデル推奨）
+- `preprocess.model` 未指定の場合は `providers.ollama.model` にフォールバック
+- `preprocess.enable: true` 時にOllamaが起動していない場合、サーバーは起動を拒否しエラーメッセージを返します
+- 英語メッセージは翻訳をスキップしてそのまま転送（オーバーヘッドなし）
+- `system` ロールのメッセージは翻訳しません（Continue/Cline等のツール指示を保護）
 
 ### ツール呼び出し検証の動作
 
