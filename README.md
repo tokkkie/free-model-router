@@ -28,6 +28,7 @@ Run it locally and point your OpenAI-compatible client at it. That's it.
 - **Local fallback** — Falls back to Ollama when all cloud models fail
 - **Streaming support** — Real-time responses via SSE
 - **Tool call verification** — Automatically tests function calling support on newly detected models and excludes incompatible ones
+- **Translation preprocessor** — Translates non-English messages to English via local Ollama before forwarding to cloud providers, and instructs the LLM to respond in the original language
 
 ## Directory Structure
 
@@ -53,6 +54,7 @@ free-model-router/
 │   ├── __init__.py
 │   ├── model_router.py            # Model list fetching and priority sorting
 │   ├── failover.py                # 429/timeout detection and model switching
+│   ├── preprocessor.py            # Translation preprocessor (non-English → English via Ollama)
 │   ├── tool_verifier.py           # Tests function calling support per model
 │   └── tool_support_registry.py   # Caches tool support results
 │
@@ -114,12 +116,36 @@ All settings are in `config.yaml`:
 | `model_cache_ttl_seconds`     | How long to cache the model list (seconds)                        |
 | `exclude_keywords`            | Keywords to exclude models (e.g. models weak at your language)    |
 | `priority_keywords`           | Keywords for model priority ordering                              |
-| `ollama_model`                | Local fallback model name                                         |
 | `verify_tool_support`         | Test function calling support on startup (default: `true`)        |
 | `verify_timeout_seconds`      | Timeout for verification requests (seconds)                       |
 | `tool_support_cache_file`     | File name for caching verification results                        |
 | `rate_limit_cooldown_seconds` | Seconds to skip a model after a 429 (default: `600`, 10 minutes)  |
 | `not_found_cooldown_seconds`  | Seconds to skip a model after a 404/422 (default: `3600`, 1 hour) |
+
+## Translation Preprocessor
+
+When enabled, non-English messages are translated to English by a local Ollama model before being forwarded to cloud providers. The cloud LLM is then instructed to respond in the original detected language.
+
+Configure in `config.yaml`:
+
+```yaml
+preprocess:
+  enable: true
+  model: phi3:mini          # Small/fast model for translation
+  translate_timeout_seconds: 30
+
+providers:
+  ollama:
+    base_url: http://localhost:11434
+    model: qwen2.5-coder:14b  # Larger model used as local fallback
+```
+
+- **`preprocess.model`**: Ollama model used for translation (recommend a small, fast model like `phi3:mini`)
+- **`providers.ollama.model`**: Ollama model used as the last-resort cloud fallback (recommend a capable model)
+- If `preprocess.model` is not set, it falls back to `providers.ollama.model`
+- If Ollama is unavailable when `preprocess.enable: true`, the server will refuse to start with a clear error message
+- English messages pass through untouched (no translation overhead)
+- `system` role messages are never translated (preserves tool instructions from clients like Continue/Cline)
 
 ## Tool Call Verification
 

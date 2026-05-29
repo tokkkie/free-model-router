@@ -50,12 +50,42 @@ sequenceDiagram
 
 ## Request Handling
 
+### Translation Preprocessor (optional)
+
+When `preprocess.enable: true`, non-English messages are translated to English before being forwarded to cloud providers.
+
+```mermaid
+sequenceDiagram
+    participant Client as Client
+    participant App as FastAPI App
+    participant PP as TranslationPreprocessor
+    participant Ollama as Ollama (phi3:mini)
+
+    Client->>App: POST /v1/chat/completions (Japanese)
+
+    App->>PP: preprocess(payload)
+    PP->>PP: detect language from user messages
+    alt Non-English detected
+        PP->>Ollama: translate user/assistant messages to English
+        Ollama-->>PP: Translated text
+        PP->>PP: Inject "Always respond in Japanese." into system message
+    else English
+        PP->>PP: Pass through unchanged
+    end
+    PP-->>App: Modified payload
+```
+
+- Only `user` and `assistant` messages are translated; `system` messages are preserved as-is
+- Language is detected from `user` role messages only (avoids false detection from English tool instructions in `system`)
+- `preprocess.model` (small/fast) is used for translation; `providers.ollama.model` (larger) is used for fallback inference
+
 ### Chat Completion Request
 
 ```mermaid
 sequenceDiagram
     participant Client as Client
     participant App as FastAPI App
+    participant PP as TranslationPreprocessor
     participant MR as ModelRouter
     participant TSR as ToolSupportRegistry
     participant FR as FailoverRouter
@@ -63,6 +93,9 @@ sequenceDiagram
     participant Ollama as Ollama Local
 
     Client->>App: POST /v1/chat/completions
+
+    App->>PP: preprocess(payload)
+    PP-->>App: Translated payload (if non-English)
 
     App->>MR: get_free_models()
     MR->>MR: Check memory cache (TTL: 300s)
@@ -207,7 +240,12 @@ providers:
 
   ollama:
     base_url: http://localhost:11434
-    model: phi3.5:latest
+    model: qwen2.5-coder:14b  # Used as last-resort local fallback
+
+preprocess:
+  enable: true
+  model: phi3:mini            # Small/fast model for translation only
+  translate_timeout_seconds: 30
 ```
 
 - **`enabled_providers`**: List of active providers (comment out to disable)
@@ -215,13 +253,15 @@ providers:
 - **`priority_keywords`**: Priority rules — lower value = higher priority
 - **`rate_limit_cooldown_seconds`**: How long to skip a model after a 429 (default: 600s, 10 minutes)
 - **`not_found_cooldown_seconds`**: How long to skip a model after a 404/422 (default: 3600s, 1 hour)
+- **`preprocess.model`**: Ollama model for translation (recommend small/fast); falls back to `providers.ollama.model` if unset
 
 ---
 
 ## Summary
 
 1. **Startup**: Fetch free models, sort by priority, verify tool support
-2. **Per request**: Try models in order, auto-skip on 429
-3. **Fallback**: Route to local Ollama when all cloud models fail
-4. **Cooldown**: Automatically skip rate-limited models for 600 seconds (10 minutes)
-5. **Ghost model handling**: 404/422 errors trigger 3600s cooldown (1 hour) to exclude removed/unavailable models
+2. **Translation**: If enabled, translate non-English input to English via local Ollama before forwarding
+3. **Per request**: Try models in order, auto-skip on 429
+4. **Fallback**: Route to local Ollama when all cloud models fail
+5. **Cooldown**: Automatically skip rate-limited models for 600 seconds (10 minutes)
+6. **Ghost model handling**: 404/422 errors trigger 3600s cooldown (1 hour) to exclude removed/unavailable models

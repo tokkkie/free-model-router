@@ -12,6 +12,7 @@ from adapters import ProviderFactory
 from adapters.base import ProviderError
 from router.failover import FailoverRouter
 from router.model_router import ModelRouter
+from router.preprocessor import TranslationPreprocessor
 from router.tool_support_registry import ToolSupportRegistry
 from router.tool_verifier import verify_tool_support
 
@@ -30,6 +31,7 @@ with open("config.yaml", encoding="utf-8") as f:
 
 # グローバル設定とプロバイダー設定を取得
 global_config = config.get("global", {})
+preprocess_config = config.get("preprocess", {})
 enabled_providers = config.get("enabled_providers", [])
 providers_config = config.get("providers", {})
 
@@ -74,6 +76,7 @@ for provider_name in enabled_providers:
 
 # FailoverRouter は起動時に local_adapter を設定するため、グローバル変数として保持
 failover_router = None
+translation_preprocessor: TranslationPreprocessor | None = None
 
 # キャッシュディレクトリの作成
 cache_dir = Path(global_config.get("cache_dir", ".cache"))
@@ -86,7 +89,29 @@ tool_support_registry = ToolSupportRegistry(
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global failover_router, local_adapter
+    global failover_router, local_adapter, translation_preprocessor
+
+    # 翻訳プリプロセッサの初期化
+    if preprocess_config.get("enable", False):
+        ollama_config = providers_config.get("ollama", {})
+        ollama_base_url = ollama_config.get("base_url", "http://localhost:11434")
+        ollama_model = (
+            preprocess_config.get("model")
+            or ollama_config.get("model", "phi3:mini")
+        )
+        translate_timeout = float(preprocess_config.get("translate_timeout_seconds", 30))
+        preprocessor = TranslationPreprocessor(
+            base_url=ollama_base_url,
+            model=ollama_model,
+            timeout=translate_timeout,
+        )
+        if not await preprocessor.is_available():
+            raise RuntimeError(
+                f"Translation preprocessor is enabled but Ollama is not running at "
+                f"{ollama_base_url}. Start Ollama or set preprocess.enable: false in config.yaml."
+            )
+        translation_preprocessor = preprocessor
+        logger.info(f"Translation preprocessor enabled (model={ollama_model}, timeout={translate_timeout}s)")
 
     # Ollama の起動確認
     if local_adapter is not None:
@@ -199,6 +224,15 @@ async def chat_completions(request: Request):
             status_code=503,
             detail="All models are currently on cooldown. Please try again later."
         )
+
+    if translation_preprocessor is not None:
+        try:
+            payload = await translation_preprocessor.preprocess(payload)
+        except Exception as e:
+            raise HTTPException(
+                status_code=503,
+                detail=f"Translation preprocessor failed: {str(e)}"
+            )
 
     try:
         result = await failover_router.execute_with_failover(payload, models_by_provider, stream)
